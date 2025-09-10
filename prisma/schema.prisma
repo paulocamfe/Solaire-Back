@@ -1,57 +1,40 @@
-
-
-
-
 datasource db {
-  provider = "mysql"
-  url      = env("DATABASE_URL")
+  provider = "postgresql" 
+  url      = env("DATABASE_URL") 
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
-model  User {
-  id  Int @id @default(autoincrement())
-  name String 
-  email String @unique
-  password String 
-  panels    Panel[]
+model User {
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String  @unique
+  password String
+  panels   Panel[]
 }
 
 model Panel {
-  id Int @id @default(autoincrement())
-  serial String @unique
-  location String
-  model String
-   installedAt DateTime? 
-  userId Int
-  user  User?  @relation(fields: [userId], references: [id])
+  id          Int           @id @default(autoincrement())
+  serial      String        @unique
+  location    String
+  model       String
+  installedAt DateTime?     @default(now())
+  userId      Int?
+  user        User?         @relation(fields: [userId], references: [id])
   measurements Measurement[]
 }
 
 model Measurement {
-  id Int @id @default(autoincrement())
-  panelId Int
-  panel Panel @relation(fields: [panelId], references: [id])
-  timestamp DateTime @default(now())
-  voltage Float
-  current Float
-  power Float
-  temperature Float
+  id          Int      @id @default(autoincrement())
+  panelId     Int
+  panel       Panel    @relation(fields: [panelId], references: [id])
+  timestamp   DateTime @default(now())
+  voltage     Float
+  current     Float
+  power       Float
+  temperature Float?
   consumption Float
-  status String
+  status      String
 }
-
-
-/*caso vc não saiba oque significa tal coisa no model Measurement*/
-
-/*id: Identificador único da medição.
-panelId : ID da placa solar relacionada.
-panel:  Relacionamento com a placa solar.
-timestamp:  Data e hora da medição.
-voltage:  Tensão medida.
-current:  Corrente medida.
-power:  Potência medida.
-temperature:  Temperatura da placa (opcional).
-consumption:  Consumo/gasto registrado.*/

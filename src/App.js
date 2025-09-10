@@ -1,40 +1,87 @@
-const express = require('express');
-const { PrismaClient } = require('@prisma/client');
+// server.js
+require('dotenv').config(); // carrega variáveis do .env
+const express = require("express");
+const { PrismaClient } = require("@prisma/client");
+const bcrypt = require("bcrypt");
+const jwt = require("jsonwebtoken");
+
 const prisma = new PrismaClient();
 const app = express();
-
 app.use(express.json());
 
-const userRoutes = require('./Routes/userRoutes');
-const panelRoutes = require('./Routes/panelRoutes');
-const measurementRoutes = require('./Routes/measurementRoutes');
+// Segredo do JWT via variável de ambiente
+const SECRET = process.env.JWT_SECRET || "defaultsecret";
 
+// ---------------- MIDDLEWARE DE AUTENTICAÇÃO ----------------
+function autenticar(req, res, next) {
+  const authHeader = req.headers["authorization"];
+  if (!authHeader) return res.status(401).json({ error: "Token necessário" });
 
-app.use('/users', userRoutes);
-app.use('/panels', panelRoutes);
-app.use('/measurements', measurementRoutes);
+  const token = authHeader.split(" ")[1]; // formato "Bearer token"
+  if (!token) return res.status(401).json({ error: "Token inválido" });
 
+  try {
+    const decoded = jwt.verify(token, SECRET);
+    req.user = decoded;
+    next();
+  } catch (err) {
+    res.status(401).json({ error: "Token inválido ou expirado" });
+  }
+}
+
+// ---------------- ROTAS ----------------
 
 // Cadastro de usuário
-app.post('/users', async (req, res) => {
+app.post("/users", async (req, res) => {
   const { name, email, password } = req.body;
   try {
+    // Verifica se já existe usuário com esse e-mail
+    const existingUser = await prisma.user.findUnique({ where: { email } });
+    if (existingUser) {
+      return res.status(400).json({ error: "E-mail já cadastrado" });
+    }
+
+    // Criptografa a senha
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    // Cria usuário
     const user = await prisma.user.create({
-      data: { name, email, password }
+      data: { name, email, password: hashedPassword },
     });
-    res.json(user);
+
+    res.status(201).json({ message: "Usuário criado com sucesso", userId: user.id });
+  } catch (err) {
+    res.status(400).json({ error: err.message });
+  }
+});
+
+// Login de usuário
+app.post("/login", async (req, res) => {
+  const { email, password } = req.body;
+  try {
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return res.status(400).json({ error: "Usuário não encontrado" });
+
+    // Verifica senha
+    const validPassword = await bcrypt.compare(password, user.password);
+    if (!validPassword) return res.status(401).json({ error: "Senha inválida" });
+
+    // Gera token JWT
+    const token = jwt.sign({ id: user.id, email: user.email }, SECRET, { expiresIn: "1h" });
+
+    res.json({ message: "Login bem-sucedido", token });
   } catch (err) {
     res.status(400).json({ error: err.message });
   }
 });
 
 // Vincular placa ao usuário pelo código (serial)
-app.post('/panels/link', async (req, res) => {
+app.post("/panels/link", autenticar, async (req, res) => {
   const { userId, serial } = req.body;
   try {
     const panel = await prisma.panel.update({
       where: { serial },
-      data: { userId }
+      data: { userId },
     });
     res.json(panel);
   } catch (err) {
@@ -43,19 +90,11 @@ app.post('/panels/link', async (req, res) => {
 });
 
 // Registrar medição
-app.post('/measurements', async (req, res) => {
+app.post("/measurements", autenticar, async (req, res) => {
   const { panelId, voltage, current, power, temperature, consumption, status } = req.body;
   try {
     const measurement = await prisma.measurement.create({
-      data: {
-        panelId,
-        voltage,
-        current,
-        power,
-        temperature,
-        consumption,
-        status
-      }
+      data: { panelId, voltage, current, power, temperature, consumption, status },
     });
     res.json(measurement);
   } catch (err) {
@@ -64,11 +103,11 @@ app.post('/measurements', async (req, res) => {
 });
 
 // Listar medições de uma placa
-app.get('/panels/:panelId/measurements', async (req, res) => {
+app.get("/panels/:panelId/measurements", autenticar, async (req, res) => {
   const { panelId } = req.params;
   try {
     const measurements = await prisma.measurement.findMany({
-      where: { panelId: Number(panelId) }
+      where: { panelId: Number(panelId) },
     });
     res.json(measurements);
   } catch (err) {
@@ -76,7 +115,8 @@ app.get('/panels/:panelId/measurements', async (req, res) => {
   }
 });
 
-// Iniciar servidor
-app.listen(3306, () => {
-  console.log('API rodando na porta 3306');
+// ---------------- INICIAR SERVIDOR ----------------
+const PORT = process.env.PORT || 3000;
+app.listen(PORT, () => {
+  console.log(`API rodando na porta ${PORT}`);
 });
