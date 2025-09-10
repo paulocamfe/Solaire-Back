@@ -1,7 +1,7 @@
 // server.js
 require('dotenv').config(); // carrega variáveis do .env
 const express = require("express");
-const cors = require("cors"); // importando cors
+const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
@@ -12,10 +12,13 @@ const app = express();
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
 
-// Habilitar CORS para qualquer origem
-app.use(cors()); 
-// OU, para permitir apenas seu frontend:
-// app.use(cors({ origin: "http://localhost:8081" }));
+// Habilitar CORS
+// Para desenvolvimento web (localhost)
+app.use(cors({
+  origin: "http://localhost:8081", // substitua pelo URL do seu frontend quando em produção
+  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+}));
 
 // Segredo do JWT via variável de ambiente
 const SECRET = process.env.JWT_SECRET || "defaultsecret";
