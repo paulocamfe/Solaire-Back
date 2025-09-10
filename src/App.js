@@ -1,13 +1,21 @@
 // server.js
 require('dotenv').config(); // carrega variáveis do .env
 const express = require("express");
+const cors = require("cors"); // importando cors
 const { PrismaClient } = require("@prisma/client");
 const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 
 const prisma = new PrismaClient();
 const app = express();
+
+// ---------------- MIDDLEWARE ----------------
 app.use(express.json());
+
+// Habilitar CORS para qualquer origem
+app.use(cors()); 
+// OU, para permitir apenas seu frontend:
+// app.use(cors({ origin: "http://localhost:8081" }));
 
 // Segredo do JWT via variável de ambiente
 const SECRET = process.env.JWT_SECRET || "defaultsecret";
@@ -35,16 +43,11 @@ function autenticar(req, res, next) {
 app.post("/users", async (req, res) => {
   const { name, email, password } = req.body;
   try {
-    // Verifica se já existe usuário com esse e-mail
     const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) {
-      return res.status(400).json({ error: "E-mail já cadastrado" });
-    }
+    if (existingUser) return res.status(400).json({ error: "E-mail já cadastrado" });
 
-    // Criptografa a senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Cria usuário
     const user = await prisma.user.create({
       data: { name, email, password: hashedPassword },
     });
@@ -62,11 +65,9 @@ app.post("/login", async (req, res) => {
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return res.status(400).json({ error: "Usuário não encontrado" });
 
-    // Verifica senha
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: "Senha inválida" });
 
-    // Gera token JWT
     const token = jwt.sign({ id: user.id, email: user.email }, SECRET, { expiresIn: "1h" });
 
     res.json({ message: "Login bem-sucedido", token });
