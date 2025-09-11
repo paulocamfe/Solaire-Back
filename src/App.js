@@ -1,4 +1,3 @@
-// server.js
 require('dotenv').config(); // carrega variáveis do .env
 const express = require("express");
 const cors = require("cors");
@@ -13,9 +12,8 @@ const app = express();
 app.use(express.json());
 
 // Habilitar CORS
-// Para desenvolvimento web (localhost)
 app.use(cors({
-  origin: "http://localhost:8081", // substitua pelo URL do seu frontend quando em produção
+  origin: "http://localhost:8081", // substitua pelo URL do seu frontend em produção
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
@@ -42,7 +40,7 @@ function autenticar(req, res, next) {
 
 // ---------------- ROTAS ----------------
 
-// Cadastro de usuário
+// Cadastro de usuário (POST /users)
 app.post("/users", async (req, res) => {
   const { name, email, password } = req.body;
   try {
@@ -61,7 +59,20 @@ app.post("/users", async (req, res) => {
   }
 });
 
-// Login de usuário
+// Listar usuários (GET /users)
+app.get("/users", async (req, res) => {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, name: true, email: true }, // não retorna senha
+    });
+    res.json(users);
+  } catch (err) {
+    console.error("Erro ao buscar usuários:", err);
+    res.status(500).json({ error: "Erro ao buscar usuários" });
+  }
+});
+
+// Login de usuário (POST /login)
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -71,7 +82,11 @@ app.post("/login", async (req, res) => {
     const validPassword = await bcrypt.compare(password, user.password);
     if (!validPassword) return res.status(401).json({ error: "Senha inválida" });
 
-    const token = jwt.sign({ id: user.id, email: user.email }, SECRET, { expiresIn: "1h" });
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      SECRET,
+      { expiresIn: "1h" }
+    );
 
     res.json({ message: "Login bem-sucedido", token });
   } catch (err) {
@@ -79,7 +94,7 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// Vincular placa ao usuário pelo código (serial)
+// Vincular placa ao usuário (POST /panels/link)
 app.post("/panels/link", autenticar, async (req, res) => {
   const { userId, serial } = req.body;
   try {
@@ -93,7 +108,7 @@ app.post("/panels/link", autenticar, async (req, res) => {
   }
 });
 
-// Registrar medição
+// Registrar medição (POST /measurements)
 app.post("/measurements", autenticar, async (req, res) => {
   const { panelId, voltage, current, power, temperature, consumption, status } = req.body;
   try {
@@ -106,7 +121,7 @@ app.post("/measurements", autenticar, async (req, res) => {
   }
 });
 
-// Listar medições de uma placa
+// Listar medições de uma placa (GET /panels/:panelId/measurements)
 app.get("/panels/:panelId/measurements", autenticar, async (req, res) => {
   const { panelId } = req.params;
   try {
