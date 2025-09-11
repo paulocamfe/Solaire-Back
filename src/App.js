@@ -94,6 +94,25 @@ app.post("/login", async (req, res) => {
   }
 });
 
+// endpoint para dados do user logado
+app.get("/me", autenticar, async (req, res) => {
+  try {
+    const user = await prisma.user.findUnique({
+      where: { id: req.user.id },
+      select: { id: true, name: true, email: true },
+    });
+
+    if (!user) return res.status(404).json({error: "Usuario não encontrado"});
+
+    res.json(user);
+  } catch (err) {
+    console.error("Erro ao buscar usuarios logados:", err);
+    res.status(500).json({ error: "erro interno"});
+  }
+});
+
+
+
 // Vincular placa ao usuário (POST /panels/link)
 app.post("/panels/link", autenticar, async (req, res) => {
   const { userId, serial } = req.body;
