@@ -1,4 +1,4 @@
-require('dotenv').config(); // carrega variáveis do .env
+require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const { PrismaClient } = require("@prisma/client");
@@ -11,14 +11,12 @@ const app = express();
 // ---------------- MIDDLEWARE ----------------
 app.use(express.json());
 
-// Habilitar CORS
 app.use(cors({
-  origin: "http://localhost:8081", // substitua pelo URL do seu frontend em produção
+  origin: "http://localhost:8081",
   methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
   allowedHeaders: ["Content-Type", "Authorization"],
 }));
 
-// Segredo do JWT via variável de ambiente
 const SECRET = process.env.JWT_SECRET || "defaultsecret";
 
 // ---------------- MIDDLEWARE DE AUTENTICAÇÃO ----------------
@@ -40,7 +38,7 @@ function autenticar(req, res, next) {
 
 // ---------------- ROTAS ----------------
 
-// Cadastro de usuário (POST /users)
+// Cadastro de usuário
 app.post("/users", async (req, res) => {
   const { name, email, password } = req.body;
   try {
@@ -59,11 +57,11 @@ app.post("/users", async (req, res) => {
   }
 });
 
-// Listar usuários (GET /users)
+// Listar usuários
 app.get("/users", async (req, res) => {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, name: true, email: true }, // não retorna senha
+      select: { id: true, name: true, email: true },
     });
     res.json(users);
   } catch (err) {
@@ -72,7 +70,7 @@ app.get("/users", async (req, res) => {
   }
 });
 
-// Login de usuário (POST /login)
+// Login
 app.post("/login", async (req, res) => {
   const { email, password } = req.body;
   try {
@@ -94,26 +92,29 @@ app.post("/login", async (req, res) => {
   }
 });
 
-// endpoint para dados do user logado
-app.get("/me", autenticar, async (req, res) => {
+// Rota /users/me - dados do usuário logado + placas vinculadas
+app.get("/users/me", autenticar, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, email: true },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        panels: { select: { id: true, serial: true } } // placas vinculadas
+      },
     });
 
-    if (!user) return res.status(404).json({error: "Usuario não encontrado"});
+    if (!user) return res.status(404).json({ error: "Usuário não encontrado" });
 
     res.json(user);
   } catch (err) {
-    console.error("Erro ao buscar usuarios logados:", err);
-    res.status(500).json({ error: "erro interno"});
+    console.error("Erro ao buscar usuário logado:", err);
+    res.status(500).json({ error: "Erro interno do servidor" });
   }
 });
 
-
-
-// Vincular placa ao usuário (POST /panels/link)
+// Vincular placa ao usuário
 app.post("/panels/link", autenticar, async (req, res) => {
   const { userId, serial } = req.body;
   try {
@@ -127,7 +128,7 @@ app.post("/panels/link", autenticar, async (req, res) => {
   }
 });
 
-// Registrar medição (POST /measurements)
+// Registrar medição
 app.post("/measurements", autenticar, async (req, res) => {
   const { panelId, voltage, current, power, temperature, consumption, status } = req.body;
   try {
@@ -140,7 +141,7 @@ app.post("/measurements", autenticar, async (req, res) => {
   }
 });
 
-// Listar medições de uma placa (GET /panels/:panelId/measurements)
+// Listar medições de uma placa
 app.get("/panels/:panelId/measurements", autenticar, async (req, res) => {
   const { panelId } = req.params;
   try {
