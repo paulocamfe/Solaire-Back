@@ -1,5 +1,5 @@
 datasource db {
-  provider = "postgresql" 
+  provider = "mysql" 
   url      = env("DATABASE_URL") 
 }
 
@@ -21,6 +21,7 @@ model Panel {
   location    String
   model       String
   installedAt DateTime?     @default(now())
+  lastSeen    DateTime?
   userId      Int?
   user        User?         @relation(fields: [userId], references: [id])
   measurements Measurement[]
@@ -35,6 +36,7 @@ model Measurement {
   current     Float
   power       Float
   temperature Float?
-  consumption Float
+  consumption Float                       
   status      String
 }
+    

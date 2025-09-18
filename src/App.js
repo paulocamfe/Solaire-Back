@@ -1,160 +1,61 @@
-require('dotenv').config(); // carrega variáveis do .env
-const express = require("express");
-const cors = require("cors");
-const { PrismaClient } = require("@prisma/client");
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
+// ...existing code...
+require('dotenv').config();
+const express = require('express');
+const cors = require('cors');
+const prisma = require('./prismaClient'); // usar cliente Prisma central
 
-const prisma = new PrismaClient();
+const usersRouter = require('./Routes/userRoutes');
+const panelsRouter = require('./Routes/panelRoutes');
+const measurementsRouter = require('./Routes/measurementRoutes');
+
 const app = express();
 
-// ---------------- MIDDLEWARE ----------------
+// Middleware
 app.use(express.json());
-
-// Habilitar CORS
 app.use(cors({
-  origin: "http://localhost:8081", // substitua pelo URL do seu frontend em produção
-  methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-  allowedHeaders: ["Content-Type", "Authorization"],
+  origin: process.env.FRONTEND_URL || 'http://localhost:8081',
+  methods: ['GET','POST','PUT','DELETE','OPTIONS'],
+  allowedHeaders: ['Content-Type','Authorization'],
 }));
 
-// Segredo do JWT via variável de ambiente
-const SECRET = process.env.JWT_SECRET || "defaultsecret";
+// Montar routers (rotas agora estão nos arquivos em src/Routes)
+app.use('/users', usersRouter);
+app.use('/panels', panelsRouter);
+app.use('/measurements', measurementsRouter);
 
-// ---------------- MIDDLEWARE DE AUTENTICAÇÃO ----------------
-function autenticar(req, res, next) {
-  const authHeader = req.headers["authorization"];
-  if (!authHeader) return res.status(401).json({ error: "Token necessário" });
+// Middleware de erro centralizado
+app.use((err, req, res, next) => {
+  console.error('Erro central:', err);
+  if (res.headersSent) return next(err);
+  res.status(err.status || 500).json({ error: err.message || 'Erro interno' });
+});
 
-  const token = authHeader.split(" ")[1]; // formato "Bearer token"
-  if (!token) return res.status(401).json({ error: "Token inválido" });
+// Iniciar servidor com shutdown gracioso
+const PORT = process.env.PORT || 3000;
+const server = app.listen(PORT, () => {
+  console.log(`API rodando na porta ${PORT}`);
+});
 
+async function shutdown(signal) {
   try {
-    const decoded = jwt.verify(token, SECRET);
-    req.user = decoded;
-    next();
-  } catch (err) {
-    res.status(401).json({ error: "Token inválido ou expirado" });
+    console.log(`Recebido ${signal}. Finalizando servidor...`);
+    server.close();
+    await prisma.$disconnect();
+    process.exit(0);
+  } catch (e) {
+    console.error('Erro no shutdown:', e);
+    process.exit(1);
   }
 }
 
-// ---------------- ROTAS ----------------
-
-// Cadastro de usuário (POST /users)
-app.post("/users", async (req, res) => {
-  const { name, email, password } = req.body;
-  try {
-    const existingUser = await prisma.user.findUnique({ where: { email } });
-    if (existingUser) return res.status(400).json({ error: "E-mail já cadastrado" });
-
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    const user = await prisma.user.create({
-      data: { name, email, password: hashedPassword },
-    });
-
-    res.status(201).json({ message: "Usuário criado com sucesso", userId: user.id });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('unhandledRejection', (reason) => {
+  console.error('Unhandled Rejection:', reason);
+  shutdown('unhandledRejection');
 });
-
-// Listar usuários (GET /users)
-app.get("/users", async (req, res) => {
-  try {
-    const users = await prisma.user.findMany({
-      select: { id: true, name: true, email: true }, // não retorna senha
-    });
-    res.json(users);
-  } catch (err) {
-    console.error("Erro ao buscar usuários:", err);
-    res.status(500).json({ error: "Erro ao buscar usuários" });
-  }
+process.on('uncaughtException', (err) => {
+  console.error('Uncaught Exception:', err);
+  shutdown('uncaughtException');
 });
-
-// Login de usuário (POST /login)
-app.post("/login", async (req, res) => {
-  const { email, password } = req.body;
-  try {
-    const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return res.status(400).json({ error: "Usuário não encontrado" });
-
-    const validPassword = await bcrypt.compare(password, user.password);
-    if (!validPassword) return res.status(401).json({ error: "Senha inválida" });
-
-    const token = jwt.sign(
-      { id: user.id, email: user.email },
-      SECRET,
-      { expiresIn: "1h" }
-    );
-
-    res.json({ message: "Login bem-sucedido", token });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// endpoint para dados do user logado
-app.get("/me", autenticar, async (req, res) => {
-  try {
-    const user = await prisma.user.findUnique({
-      where: { id: req.user.id },
-      select: { id: true, name: true, email: true },
-    });
-
-    if (!user) return res.status(404).json({error: "Usuario não encontrado"});
-
-    res.json(user);
-  } catch (err) {
-    console.error("Erro ao buscar usuarios logados:", err);
-    res.status(500).json({ error: "erro interno"});
-  }
-});
-
-
-
-// Vincular placa ao usuário (POST /panels/link)
-app.post("/panels/link", autenticar, async (req, res) => {
-  const { userId, serial } = req.body;
-  try {
-    const panel = await prisma.panel.update({
-      where: { serial },
-      data: { userId },
-    });
-    res.json(panel);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Registrar medição (POST /measurements)
-app.post("/measurements", autenticar, async (req, res) => {
-  const { panelId, voltage, current, power, temperature, consumption, status } = req.body;
-  try {
-    const measurement = await prisma.measurement.create({
-      data: { panelId, voltage, current, power, temperature, consumption, status },
-    });
-    res.json(measurement);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// Listar medições de uma placa (GET /panels/:panelId/measurements)
-app.get("/panels/:panelId/measurements", autenticar, async (req, res) => {
-  const { panelId } = req.params;
-  try {
-    const measurements = await prisma.measurement.findMany({
-      where: { panelId: Number(panelId) },
-    });
-    res.json(measurements);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// ---------------- INICIAR SERVIDOR ----------------
-const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
-  console.log(`API rodando na porta ${PORT}`);
-});
+// ...existing code...
