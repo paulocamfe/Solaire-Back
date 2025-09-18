@@ -1,0 +1,121 @@
+UserController (src/controllers/userController.js)
+
+registerUser(req, res, next)
+Função: criar novo usuário.
+Entrada: body { name, email, password }.
+Saída: 201 + { message, user } ou 4xx em validação/duplicidade.
+Autenticação: pública.
+Observação: faz hash da senha e não retorna o password.
+loginUser(req, res, next)
+Função: autenticar usuário e emitir JWT.
+Entrada: body { email, password }.
+Saída: 200 + { message, token, user } ou 401 em credenciais inválidas.
+Autenticação: pública.
+listUsers(req, res, next)
+Função: listar usuários com paginação.
+Entrada: query ?page=&limit=.
+Saída: 200 + { meta, data } (usuários sem senha).
+Autenticação: protegida (use middleware autenticar).
+getMe(req, res, next)
+Função: retornar dados do usuário logado (com base no JWT).
+Entrada: req.user (setado por autenticar).
+Saída: 200 + { id, name, email } ou 401/404.
+Autenticação: protegida.
+
+PanelController (src/controllers/panelController.js)
+
+provisionPanel(req, res, next)
+Função: criar ou atualizar uma placa (provisionamento).
+Entrada: body { serial, location?, model? }.
+Saída: 201 + { panel }.
+Autenticação: geralmente protegida (admin/user).
+listPanels(req, res, next)
+Função: listar placas (campos públicos).
+Entrada: query (pode adicionar paginação).
+Saída: 200 + array de panels.
+Autenticação: protegida.
+getPanel(req, res, next)
+Função: obter detalhes de uma placa por id (req.params.id).
+Saída: 200 + panel ou 404.
+Autenticação: protegida.
+linkPanelToUser(req, res, next)
+Função: vincular uma placa a um usuário.
+Entrada: body { panelId, userId }.
+Saída: 200 + panel atualizado.
+Autenticação: protegida.
+
+MeasurementController (src/controllers/measurementController.js)
+
+ingestMeasurement(req, res, next)
+Função: registrar medição e atualizar panel.lastSeen.
+Entrada: body { panelId, voltage, current, power, temperature?, consumption?, status?, timestamp? }.
+Saída: 201 + { message, measurementId } ou 400 se faltar dados.
+Autenticação: depende — pode usar autenticar (usuário) ou deviceAuth (dispositivo). No seu caso atual, usa autenticar.
+Observação: converte valores, cria registro e atualiza lastSeen da panel.
+ping(req, res, next)
+Função: atualizar somente lastSeen (sem criar medição).
+Entrada: body { panelId, timestamp? }.
+Saída: 200 + panel lastSeen atualizado.
+Autenticação: protegida.
+
+
+Como integrar nas rotas (onde colar)
+
+userRoutes.js -> usa funções do userController (já feito).
+router.post('/', registerUser)
+router.post('/login', loginUser)
+router.get('/', autenticar, listUsers)
+router.get('/me', autenticar, getMe)
+panelRoutes.js -> importe panelController e monte:
+router.post('/provision', autenticar, provisionPanel)
+router.get('/', autenticar, listPanels)
+router.get('/:id', autenticar, getPanel)
+router.post('/link', autenticar, linkPanelToUser)
+measurementRoutes.js -> importe measurementController:
+router.post('/', autenticar, ingestMeasurement) // ou deviceAuth
+router.post('/ping', autenticar, ping)
+Boas práticas rápidas
+
+Validação: adicionar express-validator/Joi nos controllers ou como middleware.
+Autenticação: garantir que middleware autenticar use o mesmo JWT_SECRET.
+Tratamento de erros: os controllers encaminham errors via next(err) para middleware central.
+Testes: criar unit tests para as funções principais (registro/login/ingest).
+Quer que eu gere agora os arquivos de controllers completos no seu workspace (substituindo os existentes) e atualize as rotas automaticamente?
+
+----------------------------------------------------------------------------------------------
+Resumo das funções (controllers)
+
+provisionPanel(req, res, next)
+
+O que faz: cria ou atualiza uma panel (provisionamento) com base no serial.
+DB: usa upsert -> cria se não existir ou atualiza location/model se existir.
+Input (body): { serial: string (obrigatório), location?: string, model?: string }
+Output: 201 + { message: 'Panel provisioned', panel: { id, serial, location, model, installedAt, lastSeen, userId } }
+Auth: protegido (ex.: admin/user) — usado em POST /panels/provision (recomendo)
+listPanels(req, res, next)
+
+O que faz: retorna lista paginada de panels.
+DB: findMany + count
+Input (query): ?page=1&limit=50 (opcional)
+Output: 200 + { meta: { page, limit, total, pages }, data: [ panels ] }
+Auth: protegido — usado em GET /panels
+getPanel(req, res, next)
+
+O que faz: retorna detalhes de uma panel por id.
+DB: findUnique(where: { id })
+Input: req.params.id
+Output: 200 + panel ou 404 se não existir
+Auth: protegido — usado em GET /panels/:id
+linkPanelToUser(req, res, next)
+
+O que faz: associa uma panel a um usuário (userId).
+DB: valida existência de panel e user, depois update panel.userId
+Input (body): { panelId: number (obrigatório), userId: number (obrigatório) }
+Output: 200 + { message: 'Panel vinculado ao usuário', panel: updatedPanel }
+Auth: protegido — usado em POST /panels/link
+Rotas recomendadas (mapeamento claro)
+
+POST /panels/provision -> provisionPanel
+GET /panels -> listPanels
+GET /panels/:id -> getPanel
+POST /panels/link -> linkPanelToUser

@@ -1,53 +1,15 @@
 const express = require('express');
 const router = express.Router();
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
 
-// CREATE
-router.post('/', async (req, res) => {
-  const { name, email, password } = req.body;
-  try {
-    const user = await prisma.user.create({ data: { name, email, password } });
-    res.json(user);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+const { registerUser, listUsers, loginUser, getMe } = require('../controllers/userController');
+const autenticar = require('../middleware/auth');
 
-// READ ALL
-router.get('/', async (req, res) => {
-  const users = await prisma.user.findMany();
-  res.json(users);
-});
+// Public routes
+router.post('/', registerUser);     // POST /users      -> cadastro
+router.post('/login', loginUser);   // POST /users/login -> login
 
-// READ ONE
-router.get('/:id', async (req, res) => {
-  const user = await prisma.user.findUnique({ where: { id: Number(req.params.id) } });
-  res.json(user);
-});
-
-// UPDATE
-router.put('/:id', async (req, res) => {
-  const { name, email, password } = req.body;
-  try {
-    const user = await prisma.user.update({
-      where: { id: Number(req.params.id) },
-      data: { name, email, password }
-    });
-    res.json(user);
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
-
-// DELETE
-router.delete('/:id', async (req, res) => {
-  try {
-    await prisma.user.delete({ where: { id: Number(req.params.id) } });
-    res.json({ message: 'Usuário deletado' });
-  } catch (err) {
-    res.status(400).json({ error: err.message });
-  }
-});
+// Protected routes
+router.get('/', autenticar, listUsers); // GET /users -> lista de usuários (protegido)
+router.get('/me', autenticar, getMe);   // GET /users/me -> dados do usuário logado
 
 module.exports = router;
