@@ -31,12 +31,9 @@ model Measurement {
   id          Int      @id @default(autoincrement())
   panelId     Int
   panel       Panel    @relation(fields: [panelId], references: [id])
-  timestamp   DateTime @default(now())
-  voltage     Float
-  current     Float
-  power       Float
-  temperature Float?
-  consumption Float                       
+  energia_kWh Float
   status      String
+  timestamp   DateTime @default(now())
 }
+
     
