@@ -1,158 +1,87 @@
 const prisma = require('../prismaClient');
 
-/**
- * Helpers
- */
-function toNumber(value) {
-  const n = Number(value);
-  return Number.isFinite(n) ? n : NaN;
-}
-
-/**
- * POST /measurements
- * body: { panelId, voltage, current, power, temperature?, consumption?, status?, timestamp? }
- * Cria medição e atualiza panel.lastSeen
- */
+// POST /measurements
+// Insere uma nova medição para um painel
 async function ingestMeasurement(req, res, next) {
   try {
-    const {
-      panelId,
-      voltage,
-      current,
-      power,
-      temperature = null,
-      consumption = 0,
-      status = 'ok',
-      timestamp,
-    } = req.body;
+    const { panelId, voltage, current, power, temperature, consumption, status } = req.body;
 
-    const pid = toNumber(panelId);
-    const v = toNumber(voltage);
-    const c = toNumber(current);
-    const p = toNumber(power);
-    const temp = temperature == null ? null : toNumber(temperature);
-    const cons = toNumber(consumption);
-
-    if (!Number.isFinite(pid) || !Number.isFinite(v) || !Number.isFinite(c) || !Number.isFinite(p)) {
-      return res.status(400).json({ error: 'panelId, voltage, current e power são obrigatórios e numéricos' });
-    }
-
-    // verifica se a panel existe
-    const panel = await prisma.panel.findUnique({ where: { id: pid } });
-    if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
-
-    const ts = timestamp ? new Date(timestamp) : new Date();
+    // Verifica se o painel pertence ao usuário logado
+    const panel = await prisma.panel.findFirst({
+      where: { id: Number(panelId), userId: req.user.id },
+    });
+    if (!panel) return res.status(403).json({ error: "Sem permissão para registrar nesse painel" });
 
     const measurement = await prisma.measurement.create({
       data: {
-        panelId: pid,
-        timestamp: ts,
-        voltage: v,
-        current: c,
-        power: p,
-        temperature: Number.isFinite(temp) ? temp : null,
-        consumption: Number.isFinite(cons) ? cons : 0,
-        status: status == null ? 'ok' : String(status),
+        panelId: panel.id,
+        voltage,
+        current,
+        power,
+        temperature,
+        consumption,
+        status,
       },
     });
 
-    // atualiza lastSeen da panel
-    await prisma.panel.update({
-      where: { id: pid },
-      data: { lastSeen: ts },
-    });
-
-    return res.status(201).json({ message: 'Medição registrada', measurement });
+    res.status(201).json(measurement);
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * POST /measurements/ping
- * body: { panelId, timestamp? }
- * Atualiza apenas lastSeen sem criar medição
- */
+// POST /measurements/ping
+// Apenas confirma que a API está funcionando
 async function ping(req, res, next) {
   try {
-    const { panelId, timestamp } = req.body;
-    const pid = toNumber(panelId);
-    if (!Number.isFinite(pid)) return res.status(400).json({ error: 'panelId é obrigatório e deve ser numérico' });
-
-    const panel = await prisma.panel.findUnique({ where: { id: pid } });
-    if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
-
-    const ts = timestamp ? new Date(timestamp) : new Date();
-    const updated = await prisma.panel.update({
-      where: { id: pid },
-      data: { lastSeen: ts },
-      select: { id: true, lastSeen: true },
-    });
-
-    return res.json({ message: 'lastSeen atualizado', panel: updated });
+    res.json({ message: "pong", user: req.user });
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * GET /panels/:panelId/measurements?page=&limit=&from=&to=
- * Lista medições de uma panel com paginação e filtros de tempo
- */
+// GET /measurements/panel/:panelId
+// Lista todas as medições de um painel
 async function listMeasurementsByPanel(req, res, next) {
   try {
-    const panelId = toNumber(req.params.panelId);
-    if (!Number.isFinite(panelId)) return res.status(400).json({ error: 'panelId inválido' });
+    const { panelId } = req.params;
 
-    const page = Math.max(1, Number(req.query.page) || 1);
-    const limit = Math.min(200, Math.max(1, Number(req.query.limit) || 100));
-    const skip = (page - 1) * limit;
-
-    const where = { panelId };
-    if (req.query.from || req.query.to) {
-      where.timestamp = {};
-      if (req.query.from) {
-        const from = new Date(req.query.from);
-        if (!isNaN(from)) where.timestamp.gte = from;
-      }
-      if (req.query.to) {
-        const to = new Date(req.query.to);
-        if (!isNaN(to)) where.timestamp.lte = to;
-      }
-    }
-
-    const [data, total] = await Promise.all([
-      prisma.measurement.findMany({
-        where,
-        orderBy: { timestamp: 'desc' },
-        skip,
-        take: limit,
-      }),
-      prisma.measurement.count({ where }),
-    ]);
-
-    return res.json({
-      meta: { page, limit, total, pages: Math.ceil(total / limit) },
-      data,
+    // Confere se o painel é do usuário logado
+    const panel = await prisma.panel.findFirst({
+      where: { id: Number(panelId), userId: req.user.id },
     });
+    if (!panel) return res.status(403).json({ error: "Sem permissão para acessar esse painel" });
+
+    const measurements = await prisma.measurement.findMany({
+      where: { panelId: panel.id },
+      orderBy: { timestamp: 'desc' },
+    });
+
+    res.json(measurements);
   } catch (err) {
     next(err);
   }
 }
 
-/**
- * GET /measurements/:id
- * Obter uma medição por id
- */
+// GET /measurements/:id
+// Busca uma medição específica
 async function getMeasurement(req, res, next) {
   try {
-    const id = toNumber(req.params.id);
-    if (!Number.isFinite(id)) return res.status(400).json({ error: 'id inválido' });
+    const { id } = req.params;
 
-    const measurement = await prisma.measurement.findUnique({ where: { id } });
-    if (!measurement) return res.status(404).json({ error: 'Medição não encontrada' });
+    const measurement = await prisma.measurement.findUnique({
+      where: { id: Number(id) },
+      include: { panel: true },
+    });
 
-    return res.json(measurement);
+    if (!measurement) return res.status(404).json({ error: "Medição não encontrada" });
+
+    // Garante que o painel pertence ao usuário logado
+    if (measurement.panel.userId !== req.user.id) {
+      return res.status(403).json({ error: "Sem permissão" });
+    }
+
+    res.json(measurement);
   } catch (err) {
     next(err);
   }

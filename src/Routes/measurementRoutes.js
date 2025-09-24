@@ -8,16 +8,18 @@ const {
   getMeasurement,
 } = require('../controllers/measurementController');
 
-const autenticar = require('../middleware/auth'); // ou deviceAuth se dispositivos enviarem sem usuário
+const autenticar = require('../middleware/auth');
 
-// Quando montado em app.use('/measurements', router):
-// POST /measurements
+// POST /measurements → cria uma nova medição
 router.post('/', autenticar, ingestMeasurement);
 
-// POST /measurements/ping
+// POST /measurements/ping → teste de autenticação
 router.post('/ping', autenticar, ping);
 
-// GET /measurements/:id
+// GET /measurements/panel/:panelId → lista todas as medições de um painel
+router.get('/panel/:panelId', autenticar, listMeasurementsByPanel);
+
+// GET /measurements/:id → retorna uma medição específica
 router.get('/:id', autenticar, getMeasurement);
 
 module.exports = router;

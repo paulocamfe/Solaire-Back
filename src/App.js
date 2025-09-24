@@ -2,8 +2,6 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const prisma = require('./prismaClient'); // Cliente Prisma centralizado
-const bcrypt = require("bcryptjs");
-const jwt = require("jsonwebtoken");
 
 // Importar routers
 const usersRouter = require('./Routes/userRoutes');
@@ -22,15 +20,12 @@ app.use(cors({
   allowedHeaders: ['Content-Type','Authorization'],
 }));
 
-// ---------------- JWT SECRET ----------------
-const SECRET = process.env.JWT_SECRET || "defaultsecret";
-
 // ---------------- ROTAS ----------------
 app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
 
-// Middleware de erro centralizado
+// ---------------- MIDDLEWARE DE ERRO CENTRALIZADO ----------------
 app.use((err, req, res, next) => {
   console.error('Erro central:', err);
   if (res.headersSent) return next(err);

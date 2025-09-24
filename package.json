@@ -5,18 +5,23 @@
   "scripts": {
     "start": "node src/app.js",
     "postinstall": "prisma generate",
-    "migrate:deploy": "prisma migrate deploy"
+    "migrate:deploy": "prisma migrate deploy",
+    "prisma:generate": "prisma generate",
+    "prisma:migrate:dev": "prisma migrate dev --name init",
+    "prisma:migrate:deploy": "prisma migrate deploy"
   },
   "dependencies": {
     "@prisma/client": "^6.16.2",
     "bcryptjs": "^3.0.2",
     "cors": "^2.8.5",
+    "dotenv": "^17.2.2",
     "express": "^5.1.0",
     "init": "^0.1.2",
     "jsonwebtoken": "^9.0.2",
     "mysql2": "^3.14.3"
   },
   "devDependencies": {
+    "nodemon": "^3.1.10",
     "prisma": "^6.16.2"
   }
 }
