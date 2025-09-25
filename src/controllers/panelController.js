@@ -1,10 +1,9 @@
 const prisma = require('../prismaClient');
-const crypto = require('crypto');
 
 /**
  * POST /panels/provision
  * Body: { serial, location?, model? }
- * Cria ou atualiza uma panel (provisionamento).
+ * Cria ou atualiza um painel (provisionamento) e vincula ao usuário logado.
  */
 async function provisionPanel(req, res, next) {
   try {
@@ -16,8 +15,8 @@ async function provisionPanel(req, res, next) {
 
     const panel = await prisma.panel.upsert({
       where: { serial },
-      update: { location, model },
-      create: { serial, location, model },
+      update: { location, model, userId: req.user.id }, // vincula ao usuário logado
+      create: { serial, location, model, userId: req.user.id },
       select: {
         id: true,
         serial: true,
@@ -37,7 +36,7 @@ async function provisionPanel(req, res, next) {
 
 /**
  * GET /panels?page=1&limit=50
- * Lista panels com paginação simples.
+ * Lista painéis do usuário logado com paginação.
  */
 async function listPanels(req, res, next) {
   try {
@@ -47,6 +46,7 @@ async function listPanels(req, res, next) {
 
     const [panels, total] = await Promise.all([
       prisma.panel.findMany({
+        where: { userId: req.user.id }, // só os painéis do usuário logado
         select: {
           id: true,
           serial: true,
@@ -60,7 +60,9 @@ async function listPanels(req, res, next) {
         take: limit,
         orderBy: { id: 'asc' },
       }),
-      prisma.panel.count(),
+      prisma.panel.count({
+        where: { userId: req.user.id },
+      }),
     ]);
 
     return res.json({
@@ -74,15 +76,15 @@ async function listPanels(req, res, next) {
 
 /**
  * GET /panels/:id
- * Obter detalhes de uma panel por id.
+ * Obter detalhes de um painel específico do usuário logado.
  */
 async function getPanel(req, res, next) {
   try {
     const id = Number(req.params.id);
     if (!id) return res.status(400).json({ error: 'id inválido' });
 
-    const panel = await prisma.panel.findUnique({
-      where: { id },
+    const panel = await prisma.panel.findFirst({
+      where: { id, userId: req.user.id }, // garante que pertence ao usuário
       select: {
         id: true,
         serial: true,
@@ -103,27 +105,20 @@ async function getPanel(req, res, next) {
 
 /**
  * POST /panels/link
- * Body: { panelId, userId }
- * Vincula uma panel a um usuário.
+ * Body: { panelId }
+ * Vincula uma panel existente ao usuário logado.
  */
 async function linkPanelToUser(req, res, next) {
   try {
     const panelId = req.body.panelId && Number(req.body.panelId);
-    const userId = req.body.userId && Number(req.body.userId);
+    if (!panelId) return res.status(400).json({ error: 'panelId é obrigatório' });
 
-    if (!panelId || !userId) return res.status(400).json({ error: 'panelId e userId são obrigatórios' });
-
-    // Verifica existência
-    const [panel, user] = await Promise.all([
-      prisma.panel.findUnique({ where: { id: panelId } }),
-      prisma.user.findUnique({ where: { id: userId } }),
-    ]);
+    const panel = await prisma.panel.findUnique({ where: { id: panelId } });
     if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
-    if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
     const updated = await prisma.panel.update({
       where: { id: panelId },
-      data: { userId },
+      data: { userId: req.user.id },
       select: {
         id: true,
         serial: true,

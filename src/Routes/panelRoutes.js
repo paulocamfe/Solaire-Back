@@ -1,19 +1,24 @@
 const express = require('express');
 const router = express.Router();
-
-const { provisionPanel, listPanels, getPanel, linkPanelToUser } = require('../controllers/panelController');
 const autenticar = require('../middleware/auth');
 
-// Provision (geralmente protegido)
-router.post('/', autenticar, provisionPanel);
+const {
+  provisionPanel,
+  listPanels,
+  getPanel,
+  linkPanelToUser,
+} = require('../controllers/panelController');
 
-// Listar panels (protegido)
+// POST /panels/provision → cria ou atualiza painel e vincula ao usuário
+router.post('/provision', autenticar, provisionPanel);
+
+// GET /panels → lista todos os painéis do usuário logado
 router.get('/', autenticar, listPanels);
 
-// Detalhes da panel (protegido)
+// GET /panels/:id → detalhes de um painel específico do usuário
 router.get('/:id', autenticar, getPanel);
 
-// Vincular panel a usuário (protegido)
-router.post('/', autenticar, linkPanelToUser);
+// POST /panels/link → vincula um painel existente ao usuário logado
+router.post('/link', autenticar, linkPanelToUser);
 
 module.exports = router;
