@@ -7,9 +7,9 @@ const prisma = require('../prismaClient');
  */
 async function provisionPanel(req, res, next) {
   try {
-    const serial = req.body.serial && String(req.body.serial).trim();
-    const location = req.body.location ? String(req.body.location).trim() : '';
-    const model = req.body.model ? String(req.body.model).trim() : '';
+    const serial = req.body.serial?.trim();
+    const location = req.body.location?.trim() || '';
+    const model = req.body.model?.trim() || '';
 
     if (!serial) return res.status(400).json({ error: 'serial é obrigatório' });
 
@@ -25,8 +25,6 @@ async function provisionPanel(req, res, next) {
         installedAt: true,
         lastSeen: true,
         userId: true,
-        energia_kWh: true,
-        status: true,
       },
     });
 
@@ -39,6 +37,7 @@ async function provisionPanel(req, res, next) {
 /**
  * GET /panels?page=1&limit=50
  * Lista painéis do usuário logado com paginação.
+ * Inclui status mais recente e última energia medida.
  */
 async function listPanels(req, res, next) {
   try {
@@ -46,32 +45,37 @@ async function listPanels(req, res, next) {
     const limit = Math.min(100, Math.max(1, Number(req.query.limit) || 50));
     const skip = (page - 1) * limit;
 
-    const [panels, total] = await Promise.all([
-      prisma.panel.findMany({
-        where: { userId: req.user.id },
-        select: {
-          id: true,
-          serial: true,
-          location: true,
-          model: true,
-          installedAt: true,
-          lastSeen: true,
-          userId: true,
-          energia_kWh: true,
-          status: true,
+    const panels = await prisma.panel.findMany({
+      where: { userId: req.user.id },
+      skip,
+      take: limit,
+      orderBy: { id: 'asc' },
+      include: {
+        measurements: {
+          orderBy: { timestamp: 'desc' },
+          take: 1, // pega apenas a última medição
         },
-        skip,
-        take: limit,
-        orderBy: { id: 'asc' },
-      }),
-      prisma.panel.count({
-        where: { userId: req.user.id },
-      }),
-    ]);
+      },
+    });
+
+    // Ajusta retorno para incluir status e energia mais recente
+    const panelsWithStatus = panels.map((p) => ({
+      id: p.id,
+      serial: p.serial,
+      location: p.location,
+      model: p.model,
+      installedAt: p.installedAt,
+      lastSeen: p.lastSeen,
+      userId: p.userId,
+      energia_kWh: p.measurements[0]?.energia_kWh || 0,
+      status: p.measurements[0]?.status || 'Desconhecido',
+    }));
+
+    const total = await prisma.panel.count({ where: { userId: req.user.id } });
 
     return res.json({
       meta: { page, limit, total, pages: Math.ceil(total / limit) },
-      data: panels,
+      data: panelsWithStatus,
     });
   } catch (err) {
     next(err);
@@ -89,21 +93,29 @@ async function getPanel(req, res, next) {
 
     const panel = await prisma.panel.findFirst({
       where: { id, userId: req.user.id },
-      select: {
-        id: true,
-        serial: true,
-        location: true,
-        model: true,
-        installedAt: true,
-        lastSeen: true,
-        userId: true,
-        energia_kWh: true,
-        status: true,
+      include: {
+        measurements: {
+          orderBy: { timestamp: 'desc' },
+          take: 1,
+        },
       },
     });
 
     if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
-    return res.json(panel);
+
+    const result = {
+      id: panel.id,
+      serial: panel.serial,
+      location: panel.location,
+      model: panel.model,
+      installedAt: panel.installedAt,
+      lastSeen: panel.lastSeen,
+      userId: panel.userId,
+      energia_kWh: panel.measurements[0]?.energia_kWh || 0,
+      status: panel.measurements[0]?.status || 'Desconhecido',
+    };
+
+    return res.json(result);
   } catch (err) {
     next(err);
   }
@@ -116,7 +128,7 @@ async function getPanel(req, res, next) {
  */
 async function linkPanelToUser(req, res, next) {
   try {
-    const panelId = req.body.panelId && Number(req.body.panelId);
+    const panelId = Number(req.body.panelId);
     if (!panelId) return res.status(400).json({ error: 'panelId é obrigatório' });
 
     const panel = await prisma.panel.findUnique({ where: { id: panelId } });
@@ -125,17 +137,6 @@ async function linkPanelToUser(req, res, next) {
     const updated = await prisma.panel.update({
       where: { id: panelId },
       data: { userId: req.user.id },
-      select: {
-        id: true,
-        serial: true,
-        location: true,
-        model: true,
-        installedAt: true,
-        lastSeen: true,
-        userId: true,
-        energia_kWh: true,
-        status: true,
-      },
     });
 
     return res.json({ message: 'Panel vinculado ao usuário', panel: updated });
@@ -146,13 +147,13 @@ async function linkPanelToUser(req, res, next) {
 
 /**
  * PATCH /panels/:serial/status
- * Body: { status }
- * Atualiza o status de um painel pelo serial (código da placa).
+ * Body: { status, energia_kWh? }
+ * Cria uma nova measurement para registrar alteração de status e energia do painel.
  */
 async function updatePanelStatusBySerial(req, res, next) {
   try {
     const serial = String(req.params.serial).trim();
-    const { status } = req.body;
+    const { status, energia_kWh } = req.body;
 
     if (!serial) return res.status(400).json({ error: 'serial é obrigatório' });
     if (!status) return res.status(400).json({ error: 'status é obrigatório' });
@@ -163,23 +164,28 @@ async function updatePanelStatusBySerial(req, res, next) {
 
     if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
 
-    const updated = await prisma.panel.update({
-      where: { serial },
-      data: { status },
-      select: {
-        id: true,
-        serial: true,
-        location: true,
-        model: true,
-        installedAt: true,
-        lastSeen: true,
-        userId: true,
-        energia_kWh: true,
-        status: true,
+    const measurement = await prisma.measurement.create({
+      data: {
+        panelId: panel.id,
+        status,
+        energia_kWh: energia_kWh || 0,
       },
     });
 
-    return res.json({ message: 'Status atualizado', panel: updated });
+    return res.json({
+      message: 'Status atualizado',
+      panel: {
+        id: panel.id,
+        serial: panel.serial,
+        location: panel.location,
+        model: panel.model,
+        installedAt: panel.installedAt,
+        lastSeen: panel.lastSeen,
+        userId: panel.userId,
+        energia_kWh: measurement.energia_kWh,
+        status: measurement.status,
+      },
+    });
   } catch (err) {
     next(err);
   }
@@ -190,5 +196,5 @@ module.exports = {
   listPanels,
   getPanel,
   linkPanelToUser,
-  updatePanelStatusBySerial, // ✅ rota nova
+  updatePanelStatusBySerial,
 };

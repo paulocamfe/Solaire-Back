@@ -22,6 +22,7 @@ model Panel {
   model       String
   installedAt DateTime?     @default(now())
   lastSeen    DateTime?
+  status      String?       // <- adicione este campo
   userId      Int?
   user        User?         @relation(fields: [userId], references: [id])
   measurements Measurement[]
