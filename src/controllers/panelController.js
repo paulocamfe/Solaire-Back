@@ -15,7 +15,7 @@ async function provisionPanel(req, res, next) {
 
     const panel = await prisma.panel.upsert({
       where: { serial },
-      update: { location, model, userId: req.user.id }, // vincula ao usuário logado
+      update: { location, model, userId: req.user.id },
       create: { serial, location, model, userId: req.user.id },
       select: {
         id: true,
@@ -25,6 +25,8 @@ async function provisionPanel(req, res, next) {
         installedAt: true,
         lastSeen: true,
         userId: true,
+        energia_kWh: true,
+        status: true,
       },
     });
 
@@ -46,7 +48,7 @@ async function listPanels(req, res, next) {
 
     const [panels, total] = await Promise.all([
       prisma.panel.findMany({
-        where: { userId: req.user.id }, // só os painéis do usuário logado
+        where: { userId: req.user.id },
         select: {
           id: true,
           serial: true,
@@ -55,6 +57,8 @@ async function listPanels(req, res, next) {
           installedAt: true,
           lastSeen: true,
           userId: true,
+          energia_kWh: true,
+          status: true,
         },
         skip,
         take: limit,
@@ -76,7 +80,7 @@ async function listPanels(req, res, next) {
 
 /**
  * GET /panels/:id
- * Obter detalhes de um painel específico do usuário logado.
+ * Obter detalhes de um painel específico pelo ID (do usuário logado).
  */
 async function getPanel(req, res, next) {
   try {
@@ -84,7 +88,7 @@ async function getPanel(req, res, next) {
     if (!id) return res.status(400).json({ error: 'id inválido' });
 
     const panel = await prisma.panel.findFirst({
-      where: { id, userId: req.user.id }, // garante que pertence ao usuário
+      where: { id, userId: req.user.id },
       select: {
         id: true,
         serial: true,
@@ -93,6 +97,8 @@ async function getPanel(req, res, next) {
         installedAt: true,
         lastSeen: true,
         userId: true,
+        energia_kWh: true,
+        status: true,
       },
     });
 
@@ -106,7 +112,7 @@ async function getPanel(req, res, next) {
 /**
  * POST /panels/link
  * Body: { panelId }
- * Vincula uma panel existente ao usuário logado.
+ * Vincula um painel existente ao usuário logado.
  */
 async function linkPanelToUser(req, res, next) {
   try {
@@ -127,10 +133,53 @@ async function linkPanelToUser(req, res, next) {
         installedAt: true,
         lastSeen: true,
         userId: true,
+        energia_kWh: true,
+        status: true,
       },
     });
 
     return res.json({ message: 'Panel vinculado ao usuário', panel: updated });
+  } catch (err) {
+    next(err);
+  }
+}
+
+/**
+ * PATCH /panels/:serial/status
+ * Body: { status }
+ * Atualiza o status de um painel pelo serial (código da placa).
+ */
+async function updatePanelStatusBySerial(req, res, next) {
+  try {
+    const serial = String(req.params.serial).trim();
+    const { status } = req.body;
+
+    if (!serial) return res.status(400).json({ error: 'serial é obrigatório' });
+    if (!status) return res.status(400).json({ error: 'status é obrigatório' });
+
+    const panel = await prisma.panel.findFirst({
+      where: { serial, userId: req.user.id },
+    });
+
+    if (!panel) return res.status(404).json({ error: 'Panel não encontrado' });
+
+    const updated = await prisma.panel.update({
+      where: { serial },
+      data: { status },
+      select: {
+        id: true,
+        serial: true,
+        location: true,
+        model: true,
+        installedAt: true,
+        lastSeen: true,
+        userId: true,
+        energia_kWh: true,
+        status: true,
+      },
+    });
+
+    return res.json({ message: 'Status atualizado', panel: updated });
   } catch (err) {
     next(err);
   }
@@ -141,4 +190,5 @@ module.exports = {
   listPanels,
   getPanel,
   linkPanelToUser,
+  updatePanelStatusBySerial, // ✅ rota nova
 };

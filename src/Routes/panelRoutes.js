@@ -7,6 +7,7 @@ const {
   listPanels,
   getPanel,
   linkPanelToUser,
+  updatePanelStatusBySerial, // ✅ novo controller
 } = require('../controllers/panelController');
 
 // POST /panels/provision → cria ou atualiza painel e vincula ao usuário
@@ -20,5 +21,8 @@ router.get('/:id', autenticar, getPanel);
 
 // POST /panels/link → vincula um painel existente ao usuário logado
 router.post('/link', autenticar, linkPanelToUser);
+
+// PATCH /panels/:serial/status → atualiza status de um painel pelo código (serial)
+router.patch('/:serial/status', autenticar, updatePanelStatusBySerial);
 
 module.exports = router;
