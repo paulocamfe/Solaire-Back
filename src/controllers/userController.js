@@ -1,12 +1,12 @@
 // src/controllers/userController.js
-const bcrypt = require('bcrypt');
+const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { prisma } = require('../prismaClient');
+const { prisma } = require('../prismaClient'); 
 const { sendMail } = require('../helpers/mailer');
 const { success, fail } = require('../helpers/responseHelper');
 const SALT_ROUNDS = 10;
 
-// registro user
+// registro usuario
 async function registerUser(req, res, next) {
   try {
     const { nome, email, password } = req.body;
@@ -28,7 +28,7 @@ async function registerUser(req, res, next) {
   }
 }
 
-//login
+// login
 async function loginUser(req, res, next) {
   try {
     const { email, password } = req.body;
@@ -48,7 +48,7 @@ async function loginUser(req, res, next) {
   }
 }
 
-// lista usuuarios
+// listar usuarios
 async function listUsers(req, res, next) {
   try {
     const users = await prisma.user.findMany({
@@ -60,7 +60,7 @@ async function listUsers(req, res, next) {
   }
 }
 
-// dados user logado
+// dados do usuario logado
 async function getMe(req, res, next) {
   try {
     const userId = req.userId; // assumindo middleware de autenticação
@@ -106,7 +106,7 @@ async function forgotPassword(req, res, next) {
   }
 }
 
-// resetar senha
+// reset senha
 async function resetPassword(req, res, next) {
   try {
     const { token, password } = req.body;
