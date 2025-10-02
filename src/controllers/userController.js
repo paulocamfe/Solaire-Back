@@ -18,21 +18,47 @@ async function registerUser(req, res, next) {
     const name = req.body.name && String(req.body.name).trim();
     const email = req.body.email && String(req.body.email).trim().toLowerCase();
     const password = req.body.password && String(req.body.password);
+    const role = req.body.role === 'BUSINESS' ? 'BUSINESS' : 'RESIDENTIAL';
+    const cpf = req.body.cpf && String(req.body.cpf).replace(/\D/g, '');
+    const cnpj = req.body.cnpj && String(req.body.cnpj).replace(/\D/g, '');
 
     if (!name || !email || !password) {
       return res.status(400).json({ error: 'name, email e password são obrigatórios' });
     }
 
-    const existing = await prisma.user.findUnique({ where: { email } });
+    if (role === 'RESIDENTIAL') {
+      if (!cpf) return res.status(400).json({ error: 'CPF é obrigatório para contas residenciais' });
+      if (cpf.length !== 11) return res.status(400).json({ error: 'CPF inválido' });
+    }
+    if (role === 'BUSINESS') {
+      if (!cnpj) return res.status(400).json({ error: 'CNPJ é obrigatório para contas empresariais' });
+      if (cnpj.length !== 14) return res.status(400).json({ error: 'CNPJ inválido' });
+    }
+
+    const existing = await prisma.user.findFirst({
+      where: {
+        OR: [
+          { email },
+          ...(cpf ? [{ cpf }] : []),
+          ...(cnpj ? [{ cnpj }] : []),
+        ],
+      },
+    });
     if (existing) {
-      // mensagem genérica para evitar enumeração em ambientes mais sensíveis
-      return res.status(409).json({ error: 'E-mail já cadastrado' });
+      return res.status(409).json({ error: 'E-mail, CPF ou CNPJ já cadastrado' });
     }
 
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
     const user = await prisma.user.create({
-      data: { name, email, password: hashed },
-      select: { id: true, name: true, email: true },
+      data: {
+        name,
+        email,
+        password: hashed,
+        role,
+        cpf: role === 'RESIDENTIAL' ? cpf : null,
+        cnpj: role === 'BUSINESS' ? cnpj : null,
+      },
+      select: { id: true, name: true, email: true, role: true, cpf: true, cnpj: true },
     });
 
     return res.status(201).json({ message: 'Usuário criado com sucesso', user });
@@ -40,6 +66,7 @@ async function registerUser(req, res, next) {
     next(err);
   }
 }
+
 
 /**
  * GET /users?page=1&limit=50
@@ -72,6 +99,7 @@ async function listUsers(req, res, next) {
 /**
  * POST /users/login
  */
+
 async function loginUser(req, res, next) {
   try {
     const email = req.body.email && String(req.body.email).trim().toLowerCase();
@@ -85,22 +113,34 @@ async function loginUser(req, res, next) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return res.status(401).json({ error: 'Credenciais inválidas' });
 
-    const token = jwt.sign({ id: user.id, email: user.email }, JWT_SECRET, { expiresIn: JWT_EXPIRES });
+    const token = jwt.sign(
+      { id: user.id, email: user.email, role: user.role },
+      JWT_SECRET,
+      { expiresIn: JWT_EXPIRES }
+    );
 
-    // retorna token + dados não sensíveis
     return res.json({
       message: 'Login bem-sucedido',
       token,
-      user: { id: user.id, name: user.name, email: user.email },
+      user: {
+        id: user.id,
+        name: user.name,
+        email: user.email,
+        role: user.role,
+        cpf: user.cpf,
+        cnpj: user.cnpj,
+      },
     });
   } catch (err) {
     next(err);
   }
 }
 
+
 /**
  * GET /users/me
  */
+
 async function getMe(req, res, next) {
   try {
     const userId = req.user && req.user.id;
@@ -108,7 +148,7 @@ async function getMe(req, res, next) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true, cpf: true, cnpj: true },
     });
     if (!user) return res.status(404).json({ error: 'Usuário não encontrado' });
 
@@ -117,6 +157,7 @@ async function getMe(req, res, next) {
     next(err);
   }
 }
+
 
 module.exports = {
   registerUser,

@@ -12,7 +12,15 @@ model User {
   name     String
   email    String  @unique
   password String
+  role     Role    @default(RESIDENTIAL)
+  cpf      String? @unique
+  cnpj     String? @unique
   panels   Panel[]
+}
+
+enum Role {
+  RESIDENTIAL
+  BUSINESS
 }
 
 model Panel {
