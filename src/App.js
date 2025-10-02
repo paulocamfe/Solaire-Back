@@ -99,4 +99,4 @@ server = app.listen(PORT, () => {
 const newsletterRouter = require('./Routes/newsletterRoutes');
 app.use('/newsletter', newsletterRouter);
 
-module.exports = app;
+module.exports = app;   
