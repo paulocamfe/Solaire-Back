@@ -1,8 +1,84 @@
-const { sendMail } = require('../helpers/mailer');
+// src/controllers/userController.js
+const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-// ...existing code...
+const { prisma } = require('../prismaClient');
+const { sendMail } = require('../helpers/mailer');
+const { success, fail } = require('../helpers/responseHelper');
+const SALT_ROUNDS = 10;
 
-// Solicitar reset de senha
+// registro user
+async function registerUser(req, res, next) {
+  try {
+    const { nome, email, password } = req.body;
+
+    if (!nome || !email || !password)
+      return fail(res, 'Preencha todos os campos', 400);
+
+    const existing = await prisma.user.findUnique({ where: { email } });
+    if (existing) return fail(res, 'E-mail já cadastrado', 400);
+
+    const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+    const user = await prisma.user.create({
+      data: { nome, email, password: hashed },
+    });
+
+    return success(res, user, 'Usuário registrado com sucesso');
+  } catch (err) {
+    next(err);
+  }
+}
+
+//login
+async function loginUser(req, res, next) {
+  try {
+    const { email, password } = req.body;
+
+    if (!email || !password)
+      return fail(res, 'Preencha todos os campos', 400);
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return fail(res, 'Usuário não encontrado', 404);
+
+    const valid = await bcrypt.compare(password, user.password);
+    if (!valid) return fail(res, 'Senha inválida', 401);
+
+    return success(res, user, 'Login realizado com sucesso');
+  } catch (err) {
+    next(err);
+  }
+}
+
+// lista usuuarios
+async function listUsers(req, res, next) {
+  try {
+    const users = await prisma.user.findMany({
+      select: { id: true, nome: true, email: true },
+    });
+    return success(res, users, 'Lista de usuários');
+  } catch (err) {
+    next(err);
+  }
+}
+
+// dados user logado
+async function getMe(req, res, next) {
+  try {
+    const userId = req.userId; // assumindo middleware de autenticação
+    if (!userId) return fail(res, 'Usuário não autenticado', 401);
+
+    const user = await prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, nome: true, email: true },
+    });
+    if (!user) return fail(res, 'Usuário não encontrado', 404);
+
+    return success(res, user);
+  } catch (err) {
+    next(err);
+  }
+}
+
+// esqueci a senha
 async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body;
@@ -30,7 +106,7 @@ async function forgotPassword(req, res, next) {
   }
 }
 
-// Resetar senha
+// resetar senha
 async function resetPassword(req, res, next) {
   try {
     const { token, password } = req.body;
@@ -40,6 +116,7 @@ async function resetPassword(req, res, next) {
         resetTokenExpires: { gte: new Date() },
       },
     });
+
     if (!user) return fail(res, 'Token inválido ou expirado', 400);
 
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
@@ -54,12 +131,10 @@ async function resetPassword(req, res, next) {
   }
 }
 
-// ...demais funções (registerUser, listUsers, loginUser, getMe)...
-
 module.exports = {
   registerUser,
-  listUsers,
   loginUser,
+  listUsers,
   getMe,
   forgotPassword,
   resetPassword,
