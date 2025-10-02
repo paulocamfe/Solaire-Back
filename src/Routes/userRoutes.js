@@ -12,4 +12,10 @@ router.post('/login', loginUser);   // POST /users/login -> login
 router.get('/', autenticar, listUsers); // GET /users -> lista de usuários (protegido)
 router.get('/me', autenticar, getMe);   // GET /users/me -> dados do usuário logado
 
+const requireRole = require('../middleware/requireRole');
+router.get('/empresas', autenticar, requireRole('BUSINESS'), handler);
+
+const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: 'Muitas tentativas, tente novamente mais tarde.' });
+router.post('/login', loginLimiter, loginUser);
+
 module.exports = router;

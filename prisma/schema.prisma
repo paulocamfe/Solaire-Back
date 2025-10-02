@@ -8,14 +8,16 @@ generator client {
 }
 
 model User {
-  id       Int     @id @default(autoincrement())
-  name     String
-  email    String  @unique
-  password String
-  role     Role    @default(RESIDENTIAL)
-  cpf      String? @unique
-  cnpj     String? @unique
-  panels   Panel[]
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      Role     @default(RESIDENTIAL)
+  cpf       String?  @unique
+  cnpj      String?  @unique
+  panels    Panel[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 enum Role {
@@ -30,10 +32,12 @@ model Panel {
   model       String
   installedAt DateTime?     @default(now())
   lastSeen    DateTime?
-  status      String?       // <- adicione este campo
+  status      String?
   userId      Int?
   user        User?         @relation(fields: [userId], references: [id])
   measurements Measurement[]
+  createdAt   DateTime      @default(now())
+  updatedAt   DateTime      @updatedAt
 }
 
 model Measurement {
@@ -43,6 +47,8 @@ model Measurement {
   energia_kWh Float
   status      String
   timestamp   DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
     
