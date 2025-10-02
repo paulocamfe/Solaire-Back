@@ -18,4 +18,7 @@ router.get('/empresas', autenticar, requireRole('BUSINESS'), handler);
 const loginLimiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 10, message: 'Muitas tentativas, tente novamente mais tarde.' });
 router.post('/login', loginLimiter, loginUser);
 
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
+
 module.exports = router;

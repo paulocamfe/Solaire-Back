@@ -96,4 +96,7 @@ server = app.listen(PORT, () => {
   logger.info(`API rodando na porta ${PORT}`);
 });
 
+const newsletterRouter = require('./Routes/newsletterRoutes');
+app.use('/newsletter', newsletterRouter);
+
 module.exports = app;

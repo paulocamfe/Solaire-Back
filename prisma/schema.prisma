@@ -8,16 +8,18 @@ generator client {
 }
 
 model User {
-  id        Int      @id @default(autoincrement())
-  name      String
-  email     String   @unique
-  password  String
-  role      Role     @default(RESIDENTIAL)
-  cpf       String?  @unique
-  cnpj      String?  @unique
-  panels    Panel[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                Int      @id @default(autoincrement())
+  name              String
+  email             String   @unique
+  password          String
+  role              Role     @default(RESIDENTIAL)
+  cpf               String?  @unique
+  cnpj              String?  @unique
+  panels            Panel[]
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+  resetToken        String?
+  resetTokenExpires DateTime?
 }
 
 enum Role {
@@ -51,4 +53,9 @@ model Measurement {
   updatedAt   DateTime @updatedAt
 }
 
+model NewsletterSubscriber {
+  id        Int      @id @default(autoincrement())
+  email     String   @unique
+  createdAt DateTime @default(now())
+}
     
