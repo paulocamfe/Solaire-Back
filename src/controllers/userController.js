@@ -10,16 +10,16 @@ const SALT_ROUNDS = 10;
 // ==================== REGISTRO DE USUÁRIO ====================
 async function registerUser(req, res, next) {
   try {
-    const { nome, email, password, tipo_conta } = req.body;
+    const { name, email, password, role } = req.body;
 
     // Verifica campos obrigatórios
-    if (!nome || !email || !password || !tipo_conta) {
+    if (!name || !email || !password || !role) {
       return fail(res, 'Preencha todos os campos', 400);
     }
 
-    // Verifica se o tipo de conta é válido
-    if (!["residencial", "empresarial"].includes(tipo_conta)) {
-      return fail(res, 'Tipo de conta inválido', 400);
+    // Verifica se o role é válido
+    if (!["RESIDENTIAL", "BUSINESS"].includes(role)) {
+      return fail(res, 'Role inválido', 400);
     }
 
     // Checa se email já existe
@@ -29,15 +29,15 @@ async function registerUser(req, res, next) {
     // Criptografa a senha
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
 
-    // Cria usuário no banco com tipo de conta
+    // Cria usuário no banco com role
     const user = await prisma.user.create({
-      data: { nome, email, password: hashed, tipo_conta },
+      data: { name, email, password: hashed, role },
     });
 
     // Retorna sucesso
     return success(
       res,
-      { id: user.id, nome: user.nome, email: user.email, tipo_conta: user.tipo_conta },
+      { id: user.id, name: user.name, email: user.email, role: user.role },
       'Usuário registrado com sucesso'
     );
 
@@ -66,9 +66,9 @@ async function loginUser(req, res, next) {
 
     return success(res, {
       id: user.id,
-      nome: user.nome,
+      name: user.name,
       email: user.email,
-      tipo_conta: user.tipo_conta, // ✅ retorna o tipo da conta
+      role: user.role,
       token
     }, 'Login realizado com sucesso');
 
@@ -81,7 +81,7 @@ async function loginUser(req, res, next) {
 async function listUsers(req, res, next) {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, nome: true, email: true, tipo_conta: true }, // ✅ inclui tipo_conta
+      select: { id: true, name: true, email: true, role: true },
     });
     return success(res, users, 'Lista de usuários');
   } catch (err) {
@@ -97,7 +97,7 @@ async function getMe(req, res, next) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, nome: true, email: true, tipo_conta: true }, // ✅ inclui tipo_conta
+      select: { id: true, name: true, email: true, role: true },
     });
     if (!user) return fail(res, 'Usuário não encontrado', 404);
 
