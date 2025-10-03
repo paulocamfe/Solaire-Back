@@ -1,4 +1,3 @@
-// src/controllers/userController.js
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
@@ -23,7 +22,7 @@ async function registerUser(req, res, next) {
       data: { nome, email, password: hashed },
     });
 
-    return success(res, user, 'Usuário registrado com sucesso');
+    return success(res, { id: user.id, nome: user.nome, email: user.email }, 'Usuário registrado com sucesso');
   } catch (err) {
     next(err);
   }
@@ -52,7 +51,6 @@ async function loginUser(req, res, next) {
     next(err);
   }
 }
-
 
 // ==================== LISTAR USUÁRIOS ====================
 async function listUsers(req, res, next) {

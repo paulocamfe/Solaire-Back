@@ -14,9 +14,11 @@ const {
 const autenticar = require('../middleware/auth');
 const requireRole = require('../middleware/requireRole');
 
-// Public routes
-router.post('/', registerUser);                  // POST /users -> cadastro
-router.post('/login', loginUser);               // POST /users/login -> login
+// ===================== ROTAS PÚBLICAS =====================
+// Cadastro de usuário
+router.post('/', registerUser); // POST /users
+
+// Recuperação de senha
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
@@ -24,13 +26,20 @@ router.post('/reset-password', resetPassword);
 const loginLimiter = rateLimit({
   windowMs: 15 * 60 * 1000, // 15 minutos
   max: 10,
-  message: 'Muitas tentativas, tente novamente mais tarde.'
+  message: { success: false, error: 'Muitas tentativas, tente novamente mais tarde.' }
 });
-router.post('/login', loginLimiter, loginUser);
 
-// Protected routes
-router.get('/', autenticar, listUsers);       // GET /users -> lista de usuários
-router.get('/me', autenticar, getMe);         // GET /users/me -> dados do usuário logado
+// Login com rate limiter
+router.post('/login', loginLimiter, loginUser); // POST /users/login
+
+// ===================== ROTAS PROTEGIDAS =====================
+// Lista todos os usuários (somente autenticado)
+router.get('/', autenticar, listUsers);
+
+// Dados do usuário logado
+router.get('/me', autenticar, getMe);
+
+// Exemplo de rota restrita por role (BUSINESS)
 router.get('/empresas', autenticar, requireRole('BUSINESS'), (req, res) => {
   res.json({ success: true, message: 'Rota de empresas funcionando' });
 });
