@@ -63,16 +63,16 @@ app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }
 // 404
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
-// Error handler
+// Error handler simples (para testar)
 app.use((err, req, res, next) => {
-  logger.error(err);
-  if (res.headersSent) return next(err);
-  res.status(err.status || 500).json({
+  console.error(err); // imprime direto no console
+  res.status(500).json({
     success: false,
     error: err.message || 'Erro interno',
     type: err.name || 'InternalError',
   });
 });
+
 
 // ================= SHUTDOWN =================
 async function shutdown(signal) {
