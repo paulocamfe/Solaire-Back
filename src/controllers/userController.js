@@ -1,16 +1,17 @@
 // src/controllers/userController.js
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
-const { prisma } = require('../prismaClient'); 
+const jwt = require('jsonwebtoken');
+const { prisma } = require('../prisma'); // ajuste conforme sua importação
 const { sendMail } = require('../helpers/mailer');
-const { success, fail } = require('../helpers/response');
+const { success, fail } = require('../helpers/responseHelper');
+
 const SALT_ROUNDS = 10;
 
-// registro usuario
+// ==================== REGISTRO DE USUÁRIO ====================
 async function registerUser(req, res, next) {
   try {
     const { nome, email, password } = req.body;
-
     if (!nome || !email || !password)
       return fail(res, 'Preencha todos os campos', 400);
 
@@ -28,13 +29,11 @@ async function registerUser(req, res, next) {
   }
 }
 
-// login
+// ==================== LOGIN ====================
 async function loginUser(req, res, next) {
   try {
     const { email, password } = req.body;
-
-    if (!email || !password)
-      return fail(res, 'Preencha todos os campos', 400);
+    if (!email || !password) return fail(res, 'Preencha todos os campos', 400);
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) return fail(res, 'Usuário não encontrado', 404);
@@ -42,13 +41,20 @@ async function loginUser(req, res, next) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return fail(res, 'Senha inválida', 401);
 
-    return success(res, user, 'Login realizado com sucesso');
+    // Gerar token JWT
+    const token = jwt.sign(
+      { id: user.id, email: user.email },
+      process.env.JWT_SECRET,
+      { expiresIn: '7d' }
+    );
+
+    return success(res, { id: user.id, nome: user.nome, email: user.email }, 'Login realizado com sucesso', token);
   } catch (err) {
     next(err);
   }
 }
 
-// listar usuarios
+// ==================== LISTAR USUÁRIOS ====================
 async function listUsers(req, res, next) {
   try {
     const users = await prisma.user.findMany({
@@ -60,10 +66,10 @@ async function listUsers(req, res, next) {
   }
 }
 
-// dados do usuario logado
+// ==================== DADOS DO USUÁRIO LOGADO ====================
 async function getMe(req, res, next) {
   try {
-    const userId = req.userId; // assumindo middleware de autenticação
+    const userId = req.userId; // definido pelo middleware auth
     if (!userId) return fail(res, 'Usuário não autenticado', 401);
 
     const user = await prisma.user.findUnique({
@@ -78,7 +84,7 @@ async function getMe(req, res, next) {
   }
 }
 
-// esqueci a senha
+// ==================== ESQUECI SENHA ====================
 async function forgotPassword(req, res, next) {
   try {
     const { email } = req.body;
@@ -106,17 +112,13 @@ async function forgotPassword(req, res, next) {
   }
 }
 
-// reset senha
+// ==================== RESET DE SENHA ====================
 async function resetPassword(req, res, next) {
   try {
     const { token, password } = req.body;
     const user = await prisma.user.findFirst({
-      where: {
-        resetToken: token,
-        resetTokenExpires: { gte: new Date() },
-      },
+      where: { resetToken: token, resetTokenExpires: { gte: new Date() } },
     });
-
     if (!user) return fail(res, 'Token inválido ou expirado', 400);
 
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
