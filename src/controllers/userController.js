@@ -41,18 +41,18 @@ async function loginUser(req, res, next) {
     const valid = await bcrypt.compare(password, user.password);
     if (!valid) return fail(res, 'Senha inválida', 401);
 
-    // Gerar token JWT
     const token = jwt.sign(
       { id: user.id, email: user.email },
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-
-    return success(res, { id: user.id, nome: user.nome, email: user.email }, 'Login realizado com sucesso', token);
+    
+    return success(res, { id: user.id, nome: user.nome, email: user.email, token }, 'Login realizado com sucesso');
   } catch (err) {
     next(err);
   }
 }
+
 
 // ==================== LISTAR USUÁRIOS ====================
 async function listUsers(req, res, next) {
