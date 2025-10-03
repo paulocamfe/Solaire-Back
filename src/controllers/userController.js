@@ -2,9 +2,9 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { prisma } = require('../prisma'); // ajuste conforme sua importação
+const { prisma } = require('../prismaClient'); 
 const { sendMail } = require('../helpers/mailer');
-const { success, fail } = require('../helpers/responseHelper');
+const { success, fail } = require('../helpers/response');
 
 const SALT_ROUNDS = 10;
 
