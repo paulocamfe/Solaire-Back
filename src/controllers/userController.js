@@ -1,7 +1,7 @@
 const bcrypt = require('bcryptjs');
 const crypto = require('crypto');
 const jwt = require('jsonwebtoken');
-const { prisma } = require('../prismaClient'); 
+const { prisma } = require('../prismaClient');
 const { sendMail } = require('../helpers/mailer');
 const { success, fail } = require('../helpers/response');
 
@@ -10,19 +10,37 @@ const SALT_ROUNDS = 10;
 // ==================== REGISTRO DE USUÁRIO ====================
 async function registerUser(req, res, next) {
   try {
-    const { nome, email, password } = req.body;
-    if (!nome || !email || !password)
-      return fail(res, 'Preencha todos os campos', 400);
+    const { nome, email, password, tipo_conta } = req.body;
 
+    // Verifica campos obrigatórios
+    if (!nome || !email || !password || !tipo_conta) {
+      return fail(res, 'Preencha todos os campos', 400);
+    }
+
+    // Verifica se o tipo de conta é válido
+    if (!["residencial", "empresarial"].includes(tipo_conta)) {
+      return fail(res, 'Tipo de conta inválido', 400);
+    }
+
+    // Checa se email já existe
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return fail(res, 'E-mail já cadastrado', 400);
 
+    // Criptografa a senha
     const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+
+    // Cria usuário no banco com tipo de conta
     const user = await prisma.user.create({
-      data: { nome, email, password: hashed },
+      data: { nome, email, password: hashed, tipo_conta },
     });
 
-    return success(res, { id: user.id, nome: user.nome, email: user.email }, 'Usuário registrado com sucesso');
+    // Retorna sucesso
+    return success(
+      res,
+      { id: user.id, nome: user.nome, email: user.email, tipo_conta: user.tipo_conta },
+      'Usuário registrado com sucesso'
+    );
+
   } catch (err) {
     next(err);
   }
@@ -45,8 +63,15 @@ async function loginUser(req, res, next) {
       process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
-    
-    return success(res, { id: user.id, nome: user.nome, email: user.email, token }, 'Login realizado com sucesso');
+
+    return success(res, {
+      id: user.id,
+      nome: user.nome,
+      email: user.email,
+      tipo_conta: user.tipo_conta, // ✅ retorna o tipo da conta
+      token
+    }, 'Login realizado com sucesso');
+
   } catch (err) {
     next(err);
   }
@@ -56,7 +81,7 @@ async function loginUser(req, res, next) {
 async function listUsers(req, res, next) {
   try {
     const users = await prisma.user.findMany({
-      select: { id: true, nome: true, email: true },
+      select: { id: true, nome: true, email: true, tipo_conta: true }, // ✅ inclui tipo_conta
     });
     return success(res, users, 'Lista de usuários');
   } catch (err) {
@@ -72,7 +97,7 @@ async function getMe(req, res, next) {
 
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { id: true, nome: true, email: true },
+      select: { id: true, nome: true, email: true, tipo_conta: true }, // ✅ inclui tipo_conta
     });
     if (!user) return fail(res, 'Usuário não encontrado', 404);
 
