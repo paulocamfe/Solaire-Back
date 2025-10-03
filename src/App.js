@@ -5,14 +5,14 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const prisma = require('./prismaClient');
-const logger = require('./helpers/logger');
+const { prisma } = require('./prismaClient'); // seu prismaClient.js
+const logger = require('./helpers/logger'); // seu logger.js
 
 // Rotas
 const usersRouter = require('./Routes/userRoutes');
-const panelsRouter = require('./Routes/panelRoutes');
-const measurementsRouter = require('./Routes/measurementRoutes');
-const newsletterRouter = require('./Routes/newsletterRoutes');
+// const panelsRouter = require('./Routes/panelRoutes');
+// const measurementsRouter = require('./Routes/measurementRoutes');
+// const newsletterRouter = require('./Routes/newsletterRoutes');
 
 // Swagger setup
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -22,7 +22,7 @@ const swaggerSpec = swaggerJsdoc({
     openapi: '3.0.0',
     info: { title: 'Solaire API', version: '1.0.0' },
   },
-  apis: ['./src/Routes/*.js'], // verifique o case do diretório
+  apis: ['./Routes/*.js'], // ajuste conforme seu projeto
 });
 
 const app = express();
@@ -34,7 +34,7 @@ if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000,
+    windowMs: 15 * 60 * 1000, // 15 minutos
     max: 200,
   })
 );
@@ -53,26 +53,25 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ================= ROTAS =================
 app.use('/users', usersRouter);
-app.use('/panels', panelsRouter);
-app.use('/measurements', measurementsRouter);
-app.use('/newsletter', newsletterRouter);
+// app.use('/panels', panelsRouter);
+// app.use('/measurements', measurementsRouter);
+// app.use('/newsletter', newsletterRouter);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
 // 404
-app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
+app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' }));
 
-// Error handler simples (para testar)
+// Error handler simples
 app.use((err, req, res, next) => {
   console.error(err); // imprime direto no console
-  res.status(500).json({
+  res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Erro interno',
     type: err.name || 'InternalError',
   });
 });
-
 
 // ================= SHUTDOWN =================
 async function shutdown(signal) {
