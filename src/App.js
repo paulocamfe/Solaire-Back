@@ -8,11 +8,13 @@ const rateLimit = require('express-rate-limit');
 const prisma = require('./prismaClient');
 const logger = require('./helpers/logger');
 
+// Rotas
 const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
 const measurementsRouter = require('./Routes/measurementRoutes');
+const newsletterRouter = require('./Routes/newsletterRoutes');
 
-// Swagger setup for API documentation
+// Swagger setup
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = swaggerJsdoc({
@@ -20,56 +22,63 @@ const swaggerSpec = swaggerJsdoc({
     openapi: '3.0.0',
     info: { title: 'Solaire API', version: '1.0.0' },
   },
-  apis: ['./src/Routes/*.js'],
+  apis: ['./src/Routes/*.js'], // verifique o case do diretório
 });
 
-// Create app
 const app = express();
 let server;
 
-// Middleware
+// ================= MIDDLEWARE =================
 app.use(helmet());
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
-app.use(rateLimit({ windowMs: 15 * 60 * 1000, max: 200 }));
-app.use(express.json());
-app.use(cors({
-  origin: process.env.FRONTEND_URL || 'http://localhost:8081',
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization'],
-}));
 
-// Swagger docs
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 200,
+  })
+);
+
+app.use(express.json());
+app.use(
+  cors({
+    origin: process.env.FRONTEND_URL || 'http://localhost:8081',
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+  })
+);
+
+// ================= SWAGGER =================
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
-// Routes
+// ================= ROTAS =================
 app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
+app.use('/newsletter', newsletterRouter);
 
-// Healthcheck route
+// Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
 
-// 404 handler
+// 404
 app.use((req, res) => res.status(404).json({ error: 'Not Found' }));
 
-// Centralized error handler
+// Error handler
 app.use((err, req, res, next) => {
   logger.error(err);
   if (res.headersSent) return next(err);
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Erro interno',
-    type: err.name || 'InternalError'
+    type: err.name || 'InternalError',
   });
 });
 
-// Graceful shutdown function
+// ================= SHUTDOWN =================
 async function shutdown(signal) {
   try {
     logger.info(`Recebido ${signal}, finalizando...`);
-    if (server) {
-      server.close();
-    }
+    if (server) server.close();
     await prisma.$disconnect();
     process.exit(0);
   } catch (e) {
@@ -78,7 +87,6 @@ async function shutdown(signal) {
   }
 }
 
-// Process event handlers for graceful shutdown
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
 process.on('unhandledRejection', (reason) => {
@@ -90,13 +98,10 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
-// Start the server
+// ================= START SERVER =================
 const PORT = process.env.PORT || 3000;
 server = app.listen(PORT, () => {
   logger.info(`API rodando na porta ${PORT}`);
 });
 
-const newsletterRouter = require('./Routes/newsletterRoutes');
-app.use('/newsletter', newsletterRouter);
-
-module.exports = app;   
+module.exports = app;
