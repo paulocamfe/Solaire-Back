@@ -1,13 +1,25 @@
 const bcrypt = require('bcryptjs');
-const { prisma } = require('../prismaClient');
-const { success, fail } = require('../helpers/response');
+const { PrismaClient } = require('@prisma/client'); // ← IMPORT DIRETO
 const jwt = require('jsonwebtoken');
 
-const SALT_ROUNDS = 10;
+// Crie a instância do Prisma DIRETAMENTE aqui
+const prisma = new PrismaClient();
+
+// Funções de resposta (caso o helpers não exista)
+const success = (res, data, message = 'Success') => {
+  return res.json({ success: true, data, message });
+};
+
+const fail = (res, error, statusCode = 400) => {
+  return res.status(statusCode).json({ success: false, error });
+};
 
 // ==================== REGISTRO DE USUÁRIO ====================
 async function registerUser(req, res, next) {
   try {
+    console.log('✅ registerUser chamado!');
+    console.log('📥 Dados:', req.body);
+    
     const { name, email, password, role } = req.body;
 
     if (!name || !email || !password || !role) {
@@ -18,17 +30,31 @@ async function registerUser(req, res, next) {
       return fail(res, 'Role inválido', 400);
     }
 
+    // TESTE: Verifique se o Prisma funciona
+    console.log('🔍 Testando conexão com Prisma...');
+    const userCount = await prisma.user.count();
+    console.log(`📊 Total de usuários: ${userCount}`);
+
     const existing = await prisma.user.findUnique({ where: { email } });
     if (existing) return fail(res, 'E-mail já cadastrado', 400);
 
-    const hashed = await bcrypt.hash(password, SALT_ROUNDS);
+    const hashed = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: { name, email, password: hashed, role },
     });
 
-    return success(res, { id: user.id, name: user.name, email: user.email, role: user.role }, 'Usuário registrado com sucesso');
+    console.log('✅ Usuário criado:', user.id);
+    
+    return success(res, { 
+      id: user.id, 
+      name: user.name, 
+      email: user.email, 
+      role: user.role 
+    }, 'Usuário registrado com sucesso');
+    
   } catch (err) {
+    console.error('❌ Erro NOVO no registerUser:', err);
     next(err);
   }
 }
