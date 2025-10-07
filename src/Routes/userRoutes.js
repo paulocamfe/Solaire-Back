@@ -1,6 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const { registerUser, loginUser, listUsers, getMe } = require('../controllers');
+const { registerUser, loginUser, listUsers, getMe } = require('../controllers/userController');
 const autenticar = require('../middleware/auth');
 
 // Rotas públicas
