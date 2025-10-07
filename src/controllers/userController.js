@@ -3,7 +3,6 @@ const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
-const JWT_SECRET = process.env.JWT_SECRET || 'segredo';
 
 // Funções de resposta
 const success = (res, data, message = 'Success') => {
@@ -42,9 +41,7 @@ async function registerUser(req, res, next) {
       email: user.email, 
       role: user.role 
     }, 'Usuário registrado com sucesso');
-    
   } catch (err) {
-    console.error('❌ Erro no registerUser:', err);
     next(err);
   }
 }
@@ -62,26 +59,18 @@ async function loginUser(req, res, next) {
     if (!valid) return fail(res, 'Senha inválida', 401);
 
     const token = jwt.sign(
-      { id: user.id, name: user.name, email: user.email, role: user.role },
-      JWT_SECRET,
+      { id: user.id, email: user.email, role: user.role },
+      process.env.JWT_SECRET || 'segredo',
       { expiresIn: '7d' }
     );
 
-    return success(res, { 
-      id: user.id, 
-      name: user.name, 
-      email: user.email, 
-      role: user.role,
-      token 
-    }, 'Login realizado com sucesso');
-
+    return success(res, { id: user.id, name: user.name, email: user.email, role: user.role, token }, 'Login realizado com sucesso');
   } catch (err) {
-    console.error('❌ Erro no loginUser:', err);
     next(err);
   }
 }
 
-// ==================== PEGAR USUÁRIO LOGADO ====================
+// ==================== PEGAR USUÁRIO LOGADO (COM AUTH) ====================
 async function getMe(req, res, next) {
   try {
     if (!req.user || !req.user.id) {
@@ -97,7 +86,6 @@ async function getMe(req, res, next) {
 
     return success(res, user, 'Usuário autenticado com sucesso');
   } catch (err) {
-    console.error('❌ Erro no getMe:', err);
     next(err);
   }
 }
