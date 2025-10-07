@@ -1,13 +1,14 @@
 const express = require('express');
 const router = express.Router();
 const { registerUser, loginUser, listUsers, getMe } = require('../controllers/userController');
+const autenticar = require('../middlewares/autenticar');
 
-// ===================== ROTAS PÚBLICAS =====================
-router.post('/', registerUser);      // POST /users
-router.post('/login', loginUser);    // POST /users/login
+// Rotas públicas
+router.post('/', registerUser);
+router.post('/login', loginUser);
 
-// ===================== ROTAS SEM AUTENTICAÇÃO =====================
-router.get('/', listUsers);          // GET /users
-router.get('/me', getMe);            // GET /users/me (pega o primeiro usuário para teste)
+// Rotas privadas
+router.get('/me', autenticar, getMe);
+router.get('/', autenticar, listUsers);
 
 module.exports = router;
