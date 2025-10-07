@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
-
-const JWT_SECRET = process.env.JWT_SECRET || 'insecure_secret_fallback';
+const JWT_SECRET = process.env.JWT_SECRET || 'segredo';
 
 module.exports = function autenticar(req, res, next) {
   const authHeader = req.headers['authorization'] || req.headers['Authorization'];
@@ -14,8 +13,8 @@ module.exports = function autenticar(req, res, next) {
 
   try {
     const decoded = jwt.verify(token, JWT_SECRET);
-    req.user = decoded;
-    return next();
+    req.user = decoded; // aqui vai estar {id, name, email, role}
+    next();
   } catch (err) {
     return res.status(401).json({ error: 'Token inválido ou expirado' });
   }
