@@ -10,9 +10,9 @@ const logger = require('./helpers/logger'); // seu logger.js
 
 // Rotas
 const usersRouter = require('./Routes/userRoutes');
-// const panelsRouter = require('./Routes/panelRoutes');
-// const measurementsRouter = require('./Routes/measurementRoutes');
-// const newsletterRouter = require('./Routes/newsletterRoutes');
+const panelsRouter = require('./Routes/panelRoutes');
+const measurementsRouter = require('./Routes/measurementRoutes');
+const newsletterRouter = require('./Routes/newsletterRoutes');
 
 // Swagger setup
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -53,9 +53,9 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ================= ROTAS =================
 app.use('/users', usersRouter);
-// app.use('/panels', panelsRouter);
-// app.use('/measurements', measurementsRouter);
-// app.use('/newsletter', newsletterRouter);
+app.use('/panels', panelsRouter);
+app.use('/measurements', measurementsRouter);
+app.use('/newsletter', newsletterRouter);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));

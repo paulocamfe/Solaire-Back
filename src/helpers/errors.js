@@ -12,4 +12,4 @@ class AuthError extends Error {
     this.status = 401;
   }
 }
-module.exports = { ValidationError, AuthError };
+module.exports = { ValidationError, AuthError };    
