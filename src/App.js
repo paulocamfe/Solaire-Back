@@ -5,8 +5,10 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const { prisma } = require('./prismaClient'); // seu prismaClient.js
 const logger = require('./helpers/logger'); // seu logger.js
+const { PrismaClient } = require('@prisma/client');
+const prisma = new PrismaClient();
+
 
 // Rotas
 const usersRouter = require('./Routes/userRoutes');
@@ -74,15 +76,12 @@ app.use((err, req, res, next) => {
 });
 
 // ================= SHUTDOWN =================
-async function shutdown(signal) {
+async function shutdown() {
   try {
-    logger.info(`Recebido ${signal}, finalizando...`);
-    if (server) server.close();
     await prisma.$disconnect();
-    process.exit(0);
-  } catch (e) {
-    logger.error('Erro no shutdown:', e);
-    process.exit(1);
+    console.log('✅ Conexão Prisma encerrada com sucesso');
+  } catch (err) {
+    console.error('❌ Erro no shutdown:', err);
   }
 }
 
