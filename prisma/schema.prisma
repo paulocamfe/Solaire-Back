@@ -1,4 +1,3 @@
-
 datasource db {
   provider = "postgresql"
   url      = env("DATABASE_URL")
@@ -11,28 +10,36 @@ generator client {
 // =================== MODELS ===================
 
 model User {
-  id                Int       @id @default(autoincrement())
-  name              String
-  email             String    @unique
-  password          String
-  role              Role      @default(RESIDENTIAL)
-  cpf               String?   @unique // Usado para role RESIDENTIAL
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String  @unique
+  password String
+  role     Role    @default(RESIDENTIAL)
+  cpf      String? @unique
 
   // --- Métricas para RESIDENTIAL ---
-
-  tarifaKwh         Float?    @default(0.75)
-  fatorCo2Kwh       Float?    @default(0.0718)
+  tarifaKwh   Float? @default(0.75)
+  fatorCo2Kwh Float? @default(0.0718)
 
   createdAt         DateTime  @default(now())
   updatedAt         DateTime  @updatedAt
   resetToken        String?
   resetTokenExpires DateTime?
+
+  // --- Relações CORRIGIDAS ---
+  // O campo 'company' (minúsculo) se relaciona com o campo 'users' em Company
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId Int?
+
+  // O campo 'panels' (minúsculo e no plural) se relaciona com o campo 'user' em Panel
+  panels Panel[]
 }
 
 model Company {
   id        Int      @id @default(autoincrement())
   name      String
-  cnpj      String   @unique // Usado para role BUSINESS
+  cnpj      String   @unique
+  // A relação inversa para 'company' em User
   users     User[]
   branches  Branch[]
   createdAt DateTime @default(now())
@@ -40,21 +47,20 @@ model Company {
 }
 
 model Branch {
-  id          Int      @id @default(autoincrement())
-  name        String
-  address     String
-  companyId   Int
-  company     Company  @relation(fields: [companyId], references: [id])
-  
-  // Uma filial (unidade de uma empresa) possui seus próprios painéis.
-  panels      Panel[]
+  id        Int     @id @default(autoincrement())
+  name      String
+  address   String
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  panels Panel[]
 
   // --- Métricas para BUSINESS (por filial) ---
-  tarifaKwh   Float    @default(0.75)
-  fatorCo2Kwh Float    @default(0.0718)
+  tarifaKwh   Float @default(0.75)
+  fatorCo2Kwh Float @default(0.0718)
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Panel {
@@ -67,17 +73,16 @@ model Panel {
   status      String?
 
   // --- RELACIONAMENTO DUPLO ---
-  // Um painel pertence OU a um usuário residencial OU a uma filial de empresa.
+  userId Int?
+  // A relação inversa para 'panels' em User
+  user   User? @relation(fields: [userId], references: [id])
 
-  userId      Int?
-  user        User?     @relation(fields: [userId], references: [id])
-
-  branchId    Int?
-  branch      Branch?   @relation(fields: [branchId], references: [id])
+  branchId Int?
+  branch   Branch? @relation(fields: [branchId], references: [id])
 
   measurements Measurement[]
-  createdAt   DateTime    @default(now())
-  updatedAt   DateTime    @updatedAt
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
 }
 
 // =================== OUTROS MODELS ===================
