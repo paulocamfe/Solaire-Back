@@ -47,12 +47,82 @@ async function ping(req, res) {
 }
 
 // ==================== LISTAR MEDIÇÕES DE UM PAINEL (VERSÃO SEGURA) ====================
-// Função implementada com verificação de posse e paginação.
+
+async function getMeasurement(req, res, next) {
+    try {
+        const measurementId = parseInt(req.params.id, 10);
+        const userId = req.user.id; // Vem do middleware de autenticação
+
+        const measurement = await prisma.measurement.findUnique({
+            where: { id: measurementId },
+            include: {
+                panel: true // Inclui o painel para verificar a quem pertence
+            },
+        });
+
+        if (!measurement) {
+            return fail(res, 'Medição não encontrada', 404);
+        }
+
+        // Verifica se o usuário logado é o dono do painel associado a esta medição
+        if (measurement.panel.userId !== userId) {
+            return fail(res, 'Você não tem permissão para ver esta medição.', 403);
+        }
+
+        return success(res, measurement);
+
+    } catch (err) {
+        next(err);
+    }
+}
+
+async function getSummary(req, res, next) {
+    try {
+        const panelId = parseInt(req.params.panelId, 10);
+        const userId = req.user.id;
+        const days = parseInt(req.query.days, 10) || 7; // Pega 'days' da URL ou usa 7 como padrão
+
+        // Lógica de verificação de posse do painel (importante para segurança)
+        const panel = await prisma.panel.findUnique({ where: { id: panelId } });
+        if (!panel) return fail(res, 'Painel não encontrado', 404);
+        if (panel.userId !== userId) return fail(res, 'Acesso não autorizado', 403);
+
+        // Calcula a data de início para a consulta
+        const startDate = new Date();
+        startDate.setDate(startDate.getDate() - days);
+
+        // Busca o somatório de energia no período
+        const result = await prisma.measurement.aggregate({
+            _sum: {
+                energia_kWh: true,
+            },
+            where: {
+                panelId: panelId,
+                timestamp: {
+                    gte: startDate, // gte = Greater Than or Equal (maior ou igual a)
+                },
+            },
+        });
+
+        const totalEnergy = result._sum.energia_kWh || 0;
+
+        return success(res, {
+            panelId: panelId,
+            periodo_dias: days,
+            total_gerado_kWh: totalEnergy,
+            media_diaria_kWh: totalEnergy / days,
+        });
+
+    } catch (err) {
+        next(err);
+    }
+}
+
 async function listMeasurementsByPanel(req, res, next) {
     try {
         const userId = req.user.id; // Do middleware de autenticação
         const panelId = parseInt(req.params.panelId, 10);
-        
+
         // Paginação
         const page = parseInt(req.query.page, 10) || 1;
         const limit = parseInt(req.query.limit, 10) || 20;
@@ -61,7 +131,7 @@ async function listMeasurementsByPanel(req, res, next) {
         const user = await prisma.user.findUnique({ where: { id: userId } });
 
         // 1. Busca o painel para verificar a quem ele pertence
-        const panel = await prisma.panel.findUnique({ 
+        const panel = await prisma.panel.findUnique({
             where: { id: panelId },
             include: { branch: true }
         });
@@ -88,8 +158,8 @@ async function listMeasurementsByPanel(req, res, next) {
             take: limit,
             skip: skip,
         });
-        
-        const totalMeasurements = await prisma.measurement.count({ where: { panelId: panelId }});
+
+        const totalMeasurements = await prisma.measurement.count({ where: { panelId: panelId } });
 
         return success(res, {
             pagination: {
@@ -110,4 +180,6 @@ module.exports = {
     ingestMeasurement,
     listMeasurementsByPanel,
     ping,
+    getMeasurement,
+    getSummary,
 };
