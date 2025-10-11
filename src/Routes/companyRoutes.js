@@ -10,7 +10,7 @@ const {
     getCompanyById,
     updateCompany,
     deleteCompany
-} = require('../Controllers/companyController');
+} = require('../controllers/companyController');
 
 // Importa os middlewares de autenticação e autorização
 const autenticar = require('../middleware/auth');
