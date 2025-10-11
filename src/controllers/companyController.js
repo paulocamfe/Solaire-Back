@@ -1,7 +1,6 @@
 const { prisma } = require("../prismaClient");
 const { success, fail } = require('../helpers/response');
 
-// Criar uma nova empresa
 async function createCompany(req, res, next) {
     try {
         const { name, cnpj } = req.body;

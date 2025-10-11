@@ -1,9 +1,6 @@
-// Em: src/Routes/companyRoutes.js
-
 const express = require('express');
 const router = express.Router();
 
-// Importa as funções do controller que contêm a lógica
 const {
     createCompany,
     getAllCompanies,
@@ -12,9 +9,8 @@ const {
     deleteCompany
 } = require('../controllers/companyController');
 
-// Importa os middlewares de autenticação e autorização
 const autenticar = require('../middleware/auth');
-const { checkRole } = require('../middleware/roles'); // Middleware para verificar o papel do usuário
+const { checkRole } = require('../middleware/roles'); 
 
 // =================== ROTAS DE COMPANY ===================
 
