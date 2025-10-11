@@ -7,7 +7,7 @@ const {
     getBranchById,
     updateBranch,
     deleteBranch
-} = require('../Controllers/branchController');
+} = require('../controllers/branchController');
 
 const autenticar = require('../middleware/auth');
 const { checkRole } = require('../middleware/roles');
