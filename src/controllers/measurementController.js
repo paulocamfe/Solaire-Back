@@ -1,10 +1,6 @@
-// Arquivo: controllers/measurementController.js
-
 const { prisma } = require("../prismaClient");
 const { success, fail } = require('../helpers/response');
 
-// ==================== INGESTÃO DE MEDIÇÃO (SEM ALTERAÇÕES) ====================
-// Esta função está perfeita e não precisa ser alterada.
 async function ingestMeasurement(req, res, next) {
     try {
         const serial = req.body.serial && String(req.body.serial).trim();
@@ -44,6 +40,10 @@ async function ingestMeasurement(req, res, next) {
     } catch (err) {
         next(err);
     }
+}
+
+async function ping(req, res) {
+    return res.status(200).json({ message: "pong" });
 }
 
 // ==================== LISTAR MEDIÇÕES DE UM PAINEL (VERSÃO SEGURA) ====================
@@ -109,4 +109,5 @@ async function listMeasurementsByPanel(req, res, next) {
 module.exports = {
     ingestMeasurement,
     listMeasurementsByPanel,
+    ping,
 };
