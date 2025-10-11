@@ -1,7 +1,7 @@
 // Arquivo: controllers/measurementController.js
 
 const { prisma } = require("../prismaClient");
-const { success, fail } = require('../helpers/responseHandlers'); // Supondo que você tenha helpers
+const { success, fail } = require('../helpers/response');
 
 // ==================== INGESTÃO DE MEDIÇÃO (SEM ALTERAÇÕES) ====================
 // Esta função está perfeita e não precisa ser alterada.

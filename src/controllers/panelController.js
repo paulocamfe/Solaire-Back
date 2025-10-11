@@ -2,7 +2,7 @@
 
 const { prisma } = require('../prismaClient');
 // Supondo que você tenha helpers de resposta
-const { success, fail } = require('../helpers/responseHandlers'); 
+const { success, fail } = require('../helpers/response'); 
 
 // ==================== ADICIONAR UM PAINEL (INTELIGENTE) ====================
 // Esta função substitui 'provisionPanel' e 'linkPanelToUser'.
