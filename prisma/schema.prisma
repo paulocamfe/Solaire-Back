@@ -1,45 +1,90 @@
+
 datasource db {
-  provider = "postgresql" 
-  url      = env("DATABASE_URL") 
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// =================== MODELS ===================
+
 model User {
-  id                Int      @id @default(autoincrement())
+  id                Int       @id @default(autoincrement())
   name              String
-  email             String   @unique
+  email             String    @unique
   password          String
-  role              Role     @default(RESIDENTIAL)
-  cpf               String?  @unique
-  cnpj              String?  @unique
-  panels            Panel[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  role              Role      @default(RESIDENTIAL)
+  cpf               String?   @unique // Usado para role RESIDENTIAL
+
+  // --- Métricas para RESIDENTIAL ---
+
+  tarifaKwh         Float?    @default(0.75)
+  fatorCo2Kwh       Float?    @default(0.0718)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   resetToken        String?
   resetTokenExpires DateTime?
 }
 
-enum Role {
-  RESIDENTIAL
-  BUSINESS
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  cnpj      String   @unique // Usado para role BUSINESS
+  users     User[]
+  branches  Branch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Branch {
+  id          Int      @id @default(autoincrement())
+  name        String
+  address     String
+  companyId   Int
+  company     Company  @relation(fields: [companyId], references: [id])
+  
+  // Uma filial (unidade de uma empresa) possui seus próprios painéis.
+  panels      Panel[]
+
+  // --- Métricas para BUSINESS (por filial) ---
+  tarifaKwh   Float    @default(0.75)
+  fatorCo2Kwh Float    @default(0.0718)
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
 
 model Panel {
-  id          Int           @id @default(autoincrement())
-  serial      String        @unique
+  id          Int       @id @default(autoincrement())
+  serial      String    @unique
   location    String
   model       String
-  installedAt DateTime?     @default(now())
+  installedAt DateTime? @default(now())
   lastSeen    DateTime?
   status      String?
+
+  // --- RELACIONAMENTO DUPLO ---
+  // Um painel pertence OU a um usuário residencial OU a uma filial de empresa.
+
   userId      Int?
-  user        User?         @relation(fields: [userId], references: [id])
+  user        User?     @relation(fields: [userId], references: [id])
+
+  branchId    Int?
+  branch      Branch?   @relation(fields: [branchId], references: [id])
+
   measurements Measurement[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
+  createdAt   DateTime    @default(now())
+  updatedAt   DateTime    @updatedAt
+}
+
+// =================== OUTROS MODELS ===================
+
+enum Role {
+  RESIDENTIAL
+  BUSINESS
 }
 
 model Measurement {
@@ -58,4 +103,3 @@ model NewsletterSubscriber {
   email     String   @unique
   createdAt DateTime @default(now())
 }
-    
