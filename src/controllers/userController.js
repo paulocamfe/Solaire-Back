@@ -68,7 +68,6 @@ async function registerBusinessUser(req, res, next) {
 
     const hashed = await bcrypt.hash(password, 10);
 
-    // Transação para garantir que tudo seja criado junto ou nada seja.
     const result = await prisma.$transaction(async (tx) => {
       const newCompany = await tx.company.create({
         data: { name: companyName, cnpj: companyCnpj },
