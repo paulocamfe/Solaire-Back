@@ -5,18 +5,19 @@ const cors = require('cors');
 const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
-const logger = require('./helpers/logger'); // seu logger.js
-const { PrismaClient } = require('@prisma/client');
-const prisma = new PrismaClient();
+const logger = require('./helpers/logger');
+const { prisma } = require('./prismaClient'); 
 
 
-// Rotas
+// --- ROTAS ---
 const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
 const measurementsRouter = require('./Routes/measurementRoutes');
 const newsletterRouter = require('./Routes/newsletterRoutes');
+const companyRoutes = require('./Routes/companyRoutes'); 
+const branchRoutes = require('./Routes/branchRoutes');   
 
-// Swagger setup
+// Swagger
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 const swaggerSpec = swaggerJsdoc({
@@ -24,7 +25,7 @@ const swaggerSpec = swaggerJsdoc({
     openapi: '3.0.0',
     info: { title: 'Solaire API', version: '1.0.0' },
   },
-  apis: ['./Routes/*.js'], // ajuste conforme seu projeto
+  apis: ['./Routes/*.js'], 
 });
 
 const app = express();
@@ -36,8 +37,8 @@ if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
-    max: 200,
+    windowMs: 15 * 60 * 1000, 
+    max: 200, 
   })
 );
 
@@ -58,6 +59,9 @@ app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
+// ADICIONE AQUI o uso das novas rotas
+app.use('/companies', companyRoutes); 
+app.use('/branches', branchRoutes);   
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -67,7 +71,7 @@ app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' 
 
 // Error handler simples
 app.use((err, req, res, next) => {
-  console.error(err); // imprime direto no console
+  console.error(err); 
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Erro interno',
@@ -76,18 +80,27 @@ app.use((err, req, res, next) => {
 });
 
 // ================= SHUTDOWN =================
-async function shutdown() {
+// Função de shutdown ajustada para funcionar com a instância única
+async function shutdown(signal) {
+  logger.info(`Recebido ${signal}, finalizando...`);
   try {
+    if (server) {
+      server.close(() => {
+        logger.info('Servidor encerrado.');
+      });
+    }
     await prisma.$disconnect();
-    console.log('✅ Conexão Prisma encerrada com sucesso');
-  } catch (err) {
-    console.error('❌ Erro no shutdown:', err);
+    logger.info('Conexão Prisma encerrada com sucesso.');
+    process.exit(0);
+  } catch (e) {
+    logger.error('Erro no shutdown:', e);
+    process.exit(1);
   }
 }
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('unhandledRejection', (reason) => {
+process.on('unhandledRejection', (reason, promise) => {
   logger.error('Unhandled Rejection:', reason);
   shutdown('unhandledRejection');
 });

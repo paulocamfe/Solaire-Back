@@ -1,45 +1,95 @@
 datasource db {
-  provider = "postgresql" 
-  url      = env("DATABASE_URL") 
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
 }
 
 generator client {
   provider = "prisma-client-js"
 }
 
+// =================== MODELS ===================
+
 model User {
-  id                Int      @id @default(autoincrement())
-  name              String
-  email             String   @unique
-  password          String
-  role              Role     @default(RESIDENTIAL)
-  cpf               String?  @unique
-  cnpj              String?  @unique
-  panels            Panel[]
-  createdAt         DateTime @default(now())
-  updatedAt         DateTime @updatedAt
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String  @unique
+  password String
+  role     Role    @default(RESIDENTIAL)
+  cpf      String? 
+
+  // --- Métricas para RESIDENTIAL ---
+  tarifaKwh   Float? @default(0.75)
+  fatorCo2Kwh Float? @default(0.0718)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
   resetToken        String?
   resetTokenExpires DateTime?
+
+  // --- Relações CORRIGIDAS ---
+  // O campo 'company' (minúsculo) se relaciona com o campo 'users' em Company
+  company   Company? @relation(fields: [companyId], references: [id])
+  companyId Int?
+
+  // O campo 'panels' (minúsculo e no plural) se relaciona com o campo 'user' em Panel
+  panels Panel[]
 }
+
+model Company {
+  id        Int      @id @default(autoincrement())
+  name      String
+  cnpj      String   @unique
+  // A relação inversa para 'company' em User
+  users     User[]
+  branches  Branch[]
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Branch {
+  id        Int     @id @default(autoincrement())
+  name      String
+  address   String
+  companyId Int
+  company   Company @relation(fields: [companyId], references: [id])
+
+  panels Panel[]
+
+  // --- Métricas para BUSINESS (por filial) ---
+  tarifaKwh   Float @default(0.75)
+  fatorCo2Kwh Float @default(0.0718)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Panel {
+  id          Int       @id @default(autoincrement())
+  serial      String    @unique
+  location    String
+  model       String
+  installedAt DateTime? @default(now())
+  lastSeen    DateTime?
+  status      String?
+
+  // --- RELACIONAMENTO DUPLO ---
+  userId Int?
+  // A relação inversa para 'panels' em User
+  user   User? @relation(fields: [userId], references: [id])
+
+  branchId Int?
+  branch   Branch? @relation(fields: [branchId], references: [id])
+
+  measurements Measurement[]
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+}
+
+// =================== OUTROS MODELS ===================
 
 enum Role {
   RESIDENTIAL
   BUSINESS
-}
-
-model Panel {
-  id          Int           @id @default(autoincrement())
-  serial      String        @unique
-  location    String
-  model       String
-  installedAt DateTime?     @default(now())
-  lastSeen    DateTime?
-  status      String?
-  userId      Int?
-  user        User?         @relation(fields: [userId], references: [id])
-  measurements Measurement[]
-  createdAt   DateTime      @default(now())
-  updatedAt   DateTime      @updatedAt
 }
 
 model Measurement {
@@ -58,4 +108,3 @@ model NewsletterSubscriber {
   email     String   @unique
   createdAt DateTime @default(now())
 }
-    

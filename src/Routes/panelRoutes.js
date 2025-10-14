@@ -1,28 +1,29 @@
+// Arquivo: routes/panelRoutes.js
+
 const express = require('express');
 const router = express.Router();
 const autenticar = require('../middleware/auth');
 
+// Importa os novos controllers, mais semânticos
 const {
-  provisionPanel,
-  listPanels,
-  getPanel,
-  linkPanelToUser,
-  updatePanelStatusBySerial, // ✅ novo controller
+  addPanel,
+  listMyPanels,
+  getPanelDetails,
 } = require('../controllers/panelController');
 
-// POST /panels/provision → cria ou atualiza painel e vincula ao usuário
-router.post('/provision', autenticar, provisionPanel);
+// Todas as rotas de painel exigem autenticação
+router.use(autenticar);
 
-// GET /panels → lista todos os painéis do usuário logado
-router.get('/', autenticar, listPanels);
+// POST /panels → Adiciona um novo painel (para residencial ou business)
+router.post('/', addPanel);
 
-// GET /panels/:id → detalhes de um painel específico do usuário
-router.get('/:id', autenticar, getPanel);
+// GET /panels → Lista os painéis do contexto do usuário logado
+router.get('/', listMyPanels);
 
-// POST /panels/link → vincula um painel existente ao usuário logado
-router.post('/link', autenticar, linkPanelToUser);
+// GET /panels/:id → Busca os detalhes de um painel específico (com verificação de posse)
+router.get('/:id', getPanelDetails);
 
-// PATCH /panels/:serial/status → atualiza status de um painel pelo código (serial)
-router.patch('/:serial/status', autenticar, updatePanelStatusBySerial);
+// Você pode adicionar outras rotas como PATCH ou DELETE aqui, seguindo o mesmo padrão.
+// Ex: router.patch('/:id', updatePanel);
 
 module.exports = router;
