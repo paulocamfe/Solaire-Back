@@ -127,7 +127,7 @@ process.on('uncaughtException', (err) => {
 });
 
 // ================= START SERVER =================
-const PORT = process.env.PORT || 3000;
+const PORT = process.env.PORT || 3333;
 server = app.listen(PORT, () => {
   logger.info(`API rodando na porta ${PORT}`);
 });
