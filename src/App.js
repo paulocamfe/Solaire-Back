@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const logger = require('./helpers/logger');
-const { prisma } = require('./prismaClient'); 
+const { prisma } = require('./prismaClient');
 
 
 // --- ROTAS ---
@@ -14,8 +14,8 @@ const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
 const measurementsRouter = require('./Routes/measurementRoutes');
 const newsletterRouter = require('./Routes/newsletterRoutes');
-const companyRoutes = require('./Routes/companyRoutes'); 
-const branchRoutes = require('./Routes/branchRoutes');   
+const companyRoutes = require('./Routes/companyRoutes');
+const branchRoutes = require('./Routes/branchRoutes');
 
 // Swagger
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -25,7 +25,7 @@ const swaggerSpec = swaggerJsdoc({
     openapi: '3.0.0',
     info: { title: 'Solaire API', version: '1.0.0' },
   },
-  apis: ['./Routes/*.js'], 
+  apis: ['./Routes/*.js'],
 });
 
 const app = express();
@@ -37,19 +37,38 @@ if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000, 
-    max: 200, 
+    windowMs: 15 * 60 * 1000,
+    max: 200,
   })
 );
 
 app.use(express.json());
+
+// ================= CORS CONFIGURATION (CORRECTED) =================
+// Lista de URLs que podem fazer requisições à sua API
+const allowedOrigins = [
+  'http://localhost:3000', // URL do seu Next.js em desenvolvimento
+  process.env.FRONTEND_URL, // URL do seu site em produção (lida do .env)
+];
+
 app.use(
   cors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:8081',
+    origin: function (origin, callback) {
+      // Permite requisições sem 'origin' (como Postman)
+      if (!origin) return callback(null, true);
+      
+      // Se a origem da requisição estiver na nossa lista de permissões, permita
+      if (allowedOrigins.indexOf(origin) === -1) {
+        const msg = 'A política de CORS para este site não permite acesso da Origem especificada.';
+        return callback(new Error(msg), false);
+      }
+      return callback(null, true);
+    },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
+
 
 // ================= SWAGGER =================
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -59,9 +78,8 @@ app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
-// ADICIONE AQUI o uso das novas rotas
-app.use('/companies', companyRoutes); 
-app.use('/branches', branchRoutes);   
+app.use('/companies', companyRoutes);
+app.use('/branches', branchRoutes);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -71,7 +89,7 @@ app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' 
 
 // Error handler simples
 app.use((err, req, res, next) => {
-  console.error(err); 
+  console.error(err);
   res.status(err.status || 500).json({
     success: false,
     error: err.message || 'Erro interno',
@@ -80,7 +98,6 @@ app.use((err, req, res, next) => {
 });
 
 // ================= SHUTDOWN =================
-// Função de shutdown ajustada para funcionar com a instância única
 async function shutdown(signal) {
   logger.info(`Recebido ${signal}, finalizando...`);
   try {
