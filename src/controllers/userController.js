@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 
 const prisma = new PrismaClient();
 
+// Funções auxiliares para respostas padronizadas
 const success = (res, data, message = 'Success') => {
   return res.json({ success: true, data, message });
 };
@@ -36,7 +37,7 @@ async function registerResidentialUser(req, res, next) {
         email,
         password: hashed,
         cpf,
-        role: 'RESIDENTIAL', 
+        role: 'RESIDENTIAL',
       },
     });
 
@@ -127,7 +128,6 @@ async function loginUser(req, res, next) {
   }
 }
 
-
 // ==================== BUSCAR DADOS DO USUÁRIO LOGADO====================
 async function getMe(req, res, next) {
   try {
@@ -166,8 +166,12 @@ async function getResidentialSummary(req, res, next) {
     });
 
     const totalEnergiaKWh = energyData._sum.energia_kWh || 0;
-    const dinheiroEconomizado = totalEnergiaKWh * user.tarifaKwh;
-    const co2EvitadoKg = totalEnergiaKWh * user.fatorCo2Kwh;
+    // Garanta que os valores padrão existam no modelo de usuário ou defina-os aqui
+    const tarifaKwh = user.tarifaKwh || 0.5; // Exemplo de valor padrão
+    const fatorCo2Kwh = user.fatorCo2Kwh || 0.82; // Exemplo de valor padrão
+
+    const dinheiroEconomizado = totalEnergiaKWh * tarifaKwh;
+    const co2EvitadoKg = totalEnergiaKWh * fatorCo2Kwh;
 
     return success(res, {
         userId,
@@ -181,7 +185,6 @@ async function getResidentialSummary(req, res, next) {
   }
 }
 
-
 // ==================== LISTAR USUÁRIOS ====================
 async function listUsers(req, res, next) {
   try {
@@ -194,6 +197,69 @@ async function listUsers(req, res, next) {
   }
 }
 
+// ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
+async function requestPasswordReset(req, res, next) {
+  try {
+    const { email } = req.body;
+    if (!email) {
+      return fail(res, 'O campo email é obrigatório.');
+    }
+
+    const user = await prisma.user.findUnique({ where: { email } });
+
+    if (user) {
+      // Gera um token de redefinição que expira em 1 hora
+      const resetToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
+
+      // IMPORTANTE: Implementar a lógica de envio de email aqui.
+      // Por enquanto, apenas exibimos no console para fins de desenvolvimento.
+      console.log(`(Simulação) Enviando email para ${email} com o token: ${resetToken}`);
+    }
+
+    return success(
+      res,
+      null,
+      'Se houver uma conta com o email informado, um link para redefinição de senha foi enviado.'
+    );
+
+  } catch (err) {
+    next(err);
+  }
+}
+
+// ==================== RESETAR A SENHA ====================
+async function resetPassword(req, res, next) {
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return fail(res, 'O token e a nova senha são obrigatórios.');
+    }
+
+    // Verifica se o token é válido e não expirado
+    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+
+    // Criptografa a nova senha
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    // Atualiza a senha do usuário no banco de dados
+    await prisma.user.update({
+      where: { id: decoded.id },
+      data: { password: hashed },
+    });
+
+    return success(res, null, 'Senha redefinida com sucesso.');
+
+  } catch (err) {
+    // Trata erros de token inválido ou expirado
+    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+      return fail(res, 'Token inválido ou expirado.', 401);
+    }
+    next(err);
+  }
+}
+
+
+// ==================== EXPORTAÇÕES ====================
 module.exports = {
   registerResidentialUser,
   registerBusinessUser,
@@ -201,4 +267,6 @@ module.exports = {
   getMe,
   getResidentialSummary,
   listUsers,
+  requestPasswordReset, // Função adicionada
+  resetPassword,        // Função adicionada
 };
