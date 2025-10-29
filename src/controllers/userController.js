@@ -198,34 +198,45 @@ async function listUsers(req, res, next) {
 }
 
 // ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
+const crypto = require('crypto');
+
 async function requestPasswordReset(req, res, next) {
   try {
     const { email } = req.body;
-    if (!email) {
-      return fail(res, 'O campo email é obrigatório.');
-    }
+    if (!email) return fail(res, 'O campo email é obrigatório.');
 
     const user = await prisma.user.findUnique({ where: { email } });
-
-    if (user) {
-      // Gera um token de redefinição que expira em 1 hora
-      const resetToken = jwt.sign({ id: user.id }, process.env.JWT_SECRET, { expiresIn: '1h' });
-
-      // IMPORTANTE: Implementar a lógica de envio de email aqui.
-      // Por enquanto, apenas exibimos no console para fins de desenvolvimento.
-      console.log(`(Simulação) Enviando email para ${email} com o token: ${resetToken}`);
+    if (!user) {
+      // Não revelar se o email existe
+      return success(res, null, 'Se houver uma conta com o email informado, um link foi enviado.');
     }
 
-    return success(
-      res,
-      null,
-      'Se houver uma conta com o email informado, um link para redefinição de senha foi enviado.'
-    );
+    // Gera um token aleatório e um hash seguro para armazenar
+    const rawToken = crypto.randomBytes(32).toString('hex');
+    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
 
+    // Define validade de 1 hora
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+
+    // Salva no banco (invalida tokens antigos)
+    await prisma.passwordReset.create({
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt,
+      },
+    });
+
+    // Simula envio de email com link
+    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+    console.log(`(Simulação) Enviar e-mail para ${email}: ${resetLink}`);
+
+    return success(res, null, 'Se houver uma conta com o email informado, um link foi enviado.');
   } catch (err) {
     next(err);
   }
 }
+
 
 // ==================== RESETAR A SENHA ====================
 async function resetPassword(req, res, next) {
@@ -235,25 +246,39 @@ async function resetPassword(req, res, next) {
       return fail(res, 'O token e a nova senha são obrigatórios.');
     }
 
-    // Verifica se o token é válido e não expirado
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    // Gera hash do token recebido (para comparar)
+    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Criptografa a nova senha
-    const hashed = await bcrypt.hash(newPassword, 10);
-
-    // Atualiza a senha do usuário no banco de dados
-    await prisma.user.update({
-      where: { id: decoded.id },
-      data: { password: hashed },
+    // Busca o registro correspondente e ainda válido
+    const resetRecord = await prisma.passwordReset.findFirst({
+      where: {
+        tokenHash,
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
+      include: { user: true },
     });
 
-    return success(res, null, 'Senha redefinida com sucesso.');
-
-  } catch (err) {
-    // Trata erros de token inválido ou expirado
-    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
+    if (!resetRecord) {
       return fail(res, 'Token inválido ou expirado.', 401);
     }
+
+    // Criptografa e atualiza senha
+    const hashed = await bcrypt.hash(newPassword, 10);
+
+    await prisma.$transaction([
+      prisma.user.update({
+        where: { id: resetRecord.userId },
+        data: { password: hashed },
+      }),
+      prisma.passwordReset.update({
+        where: { id: resetRecord.id },
+        data: { used: true },
+      }),
+    ]);
+
+    return success(res, null, 'Senha redefinida com sucesso.');
+  } catch (err) {
     next(err);
   }
 }

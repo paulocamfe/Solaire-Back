@@ -8,7 +8,6 @@ const rateLimit = require('express-rate-limit');
 const logger = require('./helpers/logger');
 const { prisma } = require('./prismaClient');
 
-
 // --- ROTAS ---
 const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
@@ -44,31 +43,14 @@ app.use(
 
 app.use(express.json());
 
-// ================= CORS CONFIGURATION (CORRECTED) =================
-// Lista de URLs que podem fazer requisições à sua API
-const allowedOrigins = [
-  'http://localhost:3000', // URL do seu Next.js em desenvolvimento
-  process.env.FRONTEND_URL, // URL do seu site em produção (lida do .env)
-];
-
+// ================= CORS LIBERADO (ACEITA QUALQUER ORIGEM) =================
 app.use(
   cors({
-    origin: function (origin, callback) {
-      // Permite requisições sem 'origin' (como Postman)
-      if (!origin) return callback(null, true);
-      
-      // Se a origem da requisição estiver na nossa lista de permissões, permita
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'A política de CORS para este site não permite acesso da Origem especificada.';
-        return callback(new Error(msg), false);
-      }
-      return callback(null, true);
-    },
+    origin: '*',
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
   })
 );
-
 
 // ================= SWAGGER =================
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
