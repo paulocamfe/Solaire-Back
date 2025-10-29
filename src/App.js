@@ -1,4 +1,4 @@
-require('dotenv').config();
+require('dotenv').config(); // Carrega variáveis do .env
 
 const express = require('express');
 const cors = require('cors');
@@ -43,14 +43,13 @@ app.use(
 
 app.use(express.json());
 
-// ================= CORS LIBERADO (ACEITA QUALQUER ORIGEM) =================
-app.use(
-  cors({
-    origin: '*',
-    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-    allowedHeaders: ['Content-Type', 'Authorization'],
-  })
-);
+// ================= CORS (ACEITA QUALQUER ORIGEM) =================
+app.use(cors({
+  origin: '*', // aceita qualquer front
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+}));
+app.options('*', cors()); // para requisições preflight
 
 // ================= SWAGGER =================
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -84,11 +83,9 @@ async function shutdown(signal) {
   logger.info(`Recebido ${signal}, finalizando...`);
   try {
     if (server) {
-      server.close(() => {
-        logger.info('Servidor encerrado.');
-      });
+      server.close(() => logger.info('Servidor encerrado.'));
     }
-    await prisma.$disconnect();
+    if (prisma) await prisma.$disconnect();
     logger.info('Conexão Prisma encerrada com sucesso.');
     process.exit(0);
   } catch (e) {
@@ -99,19 +96,11 @@ async function shutdown(signal) {
 
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));
-process.on('unhandledRejection', (reason, promise) => {
-  logger.error('Unhandled Rejection:', reason);
-  shutdown('unhandledRejection');
-});
-process.on('uncaughtException', (err) => {
-  logger.error('Uncaught Exception:', err);
-  shutdown('uncaughtException');
-});
+process.on('unhandledRejection', (reason) => shutdown('unhandledRejection'));
+process.on('uncaughtException', (err) => shutdown('uncaughtException'));
 
 // ================= START SERVER =================
 const PORT = process.env.PORT || 3333;
-server = app.listen(PORT, () => {
-  logger.info(`API rodando na porta ${PORT}`);
-});
+server = app.listen(PORT, () => logger.info(`API rodando na porta ${PORT}`));
 
 module.exports = app;
