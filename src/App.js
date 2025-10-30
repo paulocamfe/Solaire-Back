@@ -71,7 +71,10 @@ async function shutdown(signal) {
     if (server) {
       server.close(() => logger.info('Servidor encerrado.'));
     }
-    if (prisma) await prisma.$disconnect();
+    if (prisma && typeof prisma.$disconnect === 'function') {
+      await prisma.$disconnect();
+    }
+
     logger.info('Conexão Prisma encerrada com sucesso.');
     process.exit(0);
   } catch (e) {
