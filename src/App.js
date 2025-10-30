@@ -16,17 +16,6 @@ const newsletterRouter = require('./Routes/newsletterRoutes');
 const companyRoutes = require('./Routes/companyRoutes');
 const branchRoutes = require('./Routes/branchRoutes');
 
-// Swagger
-const swaggerJsdoc = require('swagger-jsdoc');
-const swaggerUi = require('swagger-ui-express');
-const swaggerSpec = swaggerJsdoc({
-  definition: {
-    openapi: '3.0.0',
-    info: { title: 'Solaire API', version: '1.0.0' },
-  },
-  apis: ['./Routes/*.js'],
-});
-
 const app = express();
 let server;
 
@@ -45,14 +34,11 @@ app.use(express.json());
 
 // ================= CORS (ACEITA QUALQUER ORIGEM) =================
 app.use(cors({
-  origin: '*', // aceita qualquer front
+  origin: '*',
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
 }));
 app.options('*', cors()); // para requisições preflight
-
-// ================= SWAGGER =================
-app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // ================= ROTAS =================
 app.use('/users', usersRouter);
