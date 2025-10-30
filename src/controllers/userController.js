@@ -218,7 +218,7 @@ async function listUsers(req, res, next) {
   }
 }
 
-// ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
+// ==================== SOLICITAR REDEFINIÇÃO DE SENHA (com CÓDIGO) ====================
 async function requestPasswordReset(req, res, next) {
   try {
     const { email } = req.body;
@@ -226,61 +226,77 @@ async function requestPasswordReset(req, res, next) {
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      return success(res, null, "Se houver uma conta com o email informado, um link foi enviado.");
+      // resposta genérica (boa prática para segurança)
+      return success(res, null, "Se houver uma conta com o email informado, um código foi enviado.");
     }
 
-    const rawToken = crypto.randomBytes(32).toString("hex");
-    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    // Gera um código de 6 dígitos (ex: 348921)
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
 
-    await prisma.passwordReset.create({
-      data: { userId: user.id, tokenHash, expiresAt },
+    // Cria hash do código antes de salvar no banco
+    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // expira em 15 minutos
+
+    // Apaga códigos antigos (boa prática)
+    await prisma.passwordReset.deleteMany({
+      where: { userId: user.id, used: false },
     });
 
-    const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
+    // Salva novo código
+    await prisma.passwordReset.create({
+      data: { userId: user.id, tokenHash: codeHash, expiresAt },
+    });
 
+    // Monta e-mail
     const emailHtml = `
       <h2>Redefinição de senha</h2>
       <p>Olá ${user.name},</p>
-      <p>Você solicitou a redefinição de senha. Clique no link abaixo para criar uma nova senha:</p>
-      <a href="${resetLink}" target="_blank">Redefinir senha</a>
+      <p>Use o código abaixo para redefinir sua senha:</p>
+      <h1 style="letter-spacing: 4px;">${code}</h1>
+      <p>O código expira em 15 minutos.</p>
       <p>Se você não solicitou, ignore este e-mail.</p>
-      <p>Atenciosamente,<br/>Equipe Solaire</p>
+      <br/>
+      <p>Equipe Solaire ☀️</p>
     `;
 
-    await sendEmail(user.email, "Redefinição de senha Solaire", emailHtml);
+    await sendEmail(user.email, "Código de redefinição de senha Solaire", emailHtml);
 
-    return success(res, null, "Se houver uma conta com o email informado, um link foi enviado.");
+    return success(res, null, "Se houver uma conta com o email informado, um código foi enviado.");
   } catch (err) {
     next(err);
   }
 }
 
-// ==================== RESETAR A SENHA ====================
+// ==================== RESETAR A SENHA (com CÓDIGO) ====================
 async function resetPassword(req, res, next) {
   try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) {
-      return fail(res, 'O token e a nova senha são obrigatórios.');
-    }
+    const { email, code, newPassword } = req.body;
 
-    const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+    if (!email || !code || !newPassword)
+      return fail(res, 'E-mail, código e nova senha são obrigatórios.');
+
+    const user = await prisma.user.findUnique({ where: { email } });
+    if (!user) return fail(res, 'Usuário não encontrado.', 404);
+
+    const codeHash = crypto.createHash('sha256').update(code).digest('hex');
 
     const resetRecord = await prisma.passwordReset.findFirst({
-      where: { tokenHash, used: false, expiresAt: { gt: new Date() } },
-      include: { user: true },
+      where: {
+        userId: user.id,
+        tokenHash: codeHash,
+        used: false,
+        expiresAt: { gt: new Date() },
+      },
     });
 
-    if (!resetRecord) {
-      return fail(res, 'Token inválido ou expirado.', 401);
-    }
+    if (!resetRecord) return fail(res, 'Código inválido ou expirado.', 401);
 
-    const hashed = await bcrypt.hash(newPassword, 10);
+    const hashedPassword = await bcrypt.hash(newPassword, 10);
 
     await prisma.$transaction([
       prisma.user.update({
-        where: { id: resetRecord.userId },
-        data: { password: hashed },
+        where: { id: user.id },
+        data: { password: hashedPassword },
       }),
       prisma.passwordReset.update({
         where: { id: resetRecord.id },
@@ -293,6 +309,7 @@ async function resetPassword(req, res, next) {
     next(err);
   }
 }
+
 
 // ==================== EXPORTAÇÕES ====================
 module.exports = {
