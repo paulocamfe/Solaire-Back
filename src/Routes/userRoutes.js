@@ -25,7 +25,7 @@
 
     // Endpoint para solicitar redefinição de senha (envia email com token)
     router.post('/forgot-password', requestPasswordReset);
-
+                
     // Endpoint para resetar a senha (recebe email + token + nova senha)
     router.post('/reset-password', resetPassword);
 

@@ -1,6 +1,7 @@
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const crypto = require('crypto');
 
 const prisma = new PrismaClient();
 
@@ -118,7 +119,7 @@ async function loginUser(req, res, next) {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      process.env.JWT_SECRET || 'segredo',
+      process.env.JWT_SECRET,
       { expiresIn: '7d' }
     );
 
@@ -229,33 +230,58 @@ async function requestPasswordReset(req, res, next) {
 
 // ==================== RESETAR A SENHA ====================
 async function resetPassword(req, res, next) {
-  try {
-    const { token, newPassword } = req.body;
-    if (!token || !newPassword) {
-      return fail(res, 'O token e a nova senha são obrigatórios.');
-    }
+  try {
+    const { token, newPassword } = req.body;
+    if (!token || !newPassword) {
+      return fail(res, 'O token e a nova senha são obrigatórios.');
+    }
 
-    // Verifica se o token é válido e não expirado
-    const decoded = jwt.verify(token, process.env.JWT_SECRET);
+// 1. Cria o HASH do token que recebemos do usuário
+const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
+// 2. Busca o registro de redefinição no banco pelo HASH
+const resetEntry = await prisma.passwordReset.findFirst({
+where: { 
+tokenHash: tokenHash  }
+});
 
-    // Criptografa a nova senha
-    const hashed = await bcrypt.hash(newPassword, 10);
+// 3. Validações de segurança
+// Se não achou, o token é inválido
+if (!resetEntry) {
+ return fail(res, 'Token inválido.', 401);
+}
+// Se já foi usado
+if (resetEntry.used) {
+return fail(res, 'Este token já foi utilizado.', 401);
+}
+// Se expirou (data de expiração é MENOR que a data de agora)
+if (resetEntry.expiresAt < new Date()) {
+return fail(res, 'Token expirado.', 401);
+}
 
-    // Atualiza a senha do usuário no banco de dados
-    await prisma.user.update({
-      where: { id: decoded.id },
-      data: { password: hashed },
-    });
+// 4. Criptografa a nova senha
+const hashed = await bcrypt.hash(newPassword, 10);
 
-    return success(res, null, 'Senha redefinida com sucesso.');
+// 5. Usa uma transação para atualizar a senha E invalidar o token
+await prisma.$transaction(async (tx) => {
+// Atualiza a senha do usuário
+await tx.user.update({
+ where: { id: resetEntry.userId },
+data: { password: hashed },
+});
 
-  } catch (err) {
-    // Trata erros de token inválido ou expirado
-    if (err.name === 'JsonWebTokenError' || err.name === 'TokenExpiredError') {
-      return fail(res, 'Token inválido ou expirado.', 401);
-    }
-    next(err);
-  }
+// Marca o token como usado
+await tx.passwordReset.update({
+ where: { id: resetEntry.id },
+data: { used: true },
+});
+});
+
+return success(res, null, 'Senha redefinida com sucesso.');
+
+} catch (err) {
+// Removemos o catch específico de JWT, pois não o usamos mais aqui
+next(err);
+}
 }
 
 

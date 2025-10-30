@@ -47,6 +47,8 @@ app.use(express.json());
 // ================= CORS CONFIGURATION (CORRECTED) =================
 // Lista de URLs que podem fazer requisições à sua API
 const allowedOrigins = [
+  'http://localhost:3333',
+  'http://localhost:8081',
   'http://localhost:3000', // URL do seu Next.js em desenvolvimento
   process.env.FRONTEND_URL, // URL do seu site em produção (lida do .env)
 ];
