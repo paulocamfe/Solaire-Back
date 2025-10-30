@@ -1,10 +1,32 @@
 const bcrypt = require('bcryptjs');
 const { PrismaClient } = require('@prisma/client');
 const jwt = require('jsonwebtoken');
+const nodemailer = require("nodemailer");
+const crypto = require("crypto");
 
 const prisma = new PrismaClient();
 
-// Funções auxiliares para respostas padronizadas
+// ==================== Nodemailer ====================
+const transporter = nodemailer.createTransport({
+  host: process.env.EMAIL_HOST,
+  port: parseInt(process.env.EMAIL_PORT, 10),
+  secure: process.env.EMAIL_SECURE === "true",
+  auth: {
+    user: process.env.EMAIL_USER,
+    pass: process.env.EMAIL_PASS,
+  },
+});
+
+async function sendEmail(to, subject, html) {
+  await transporter.sendMail({
+    from: `"Solaire" <${process.env.EMAIL_USER}>`,
+    to,
+    subject,
+    html,
+  });
+}
+
+// ==================== Funções auxiliares ====================
 const success = (res, data, message = 'Success') => {
   return res.json({ success: true, data, message });
 };
@@ -128,7 +150,7 @@ async function loginUser(req, res, next) {
   }
 }
 
-// ==================== BUSCAR DADOS DO USUÁRIO LOGADO====================
+// ==================== BUSCAR DADOS DO USUÁRIO LOGADO ====================
 async function getMe(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
@@ -166,9 +188,8 @@ async function getResidentialSummary(req, res, next) {
     });
 
     const totalEnergiaKWh = energyData._sum.energia_kWh || 0;
-    // Garanta que os valores padrão existam no modelo de usuário ou defina-os aqui
-    const tarifaKwh = user.tarifaKwh || 0.5; // Exemplo de valor padrão
-    const fatorCo2Kwh = user.fatorCo2Kwh || 0.82; // Exemplo de valor padrão
+    const tarifaKwh = user.tarifaKwh || 0.5;
+    const fatorCo2Kwh = user.fatorCo2Kwh || 0.82;
 
     const dinheiroEconomizado = totalEnergiaKWh * tarifaKwh;
     const co2EvitadoKg = totalEnergiaKWh * fatorCo2Kwh;
@@ -198,45 +219,42 @@ async function listUsers(req, res, next) {
 }
 
 // ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
-const crypto = require('crypto');
-
 async function requestPasswordReset(req, res, next) {
   try {
     const { email } = req.body;
-    if (!email) return fail(res, 'O campo email é obrigatório.');
+    if (!email) return fail(res, "O campo email é obrigatório.");
 
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user) {
-      // Não revelar se o email existe
-      return success(res, null, 'Se houver uma conta com o email informado, um link foi enviado.');
+      return success(res, null, "Se houver uma conta com o email informado, um link foi enviado.");
     }
 
-    // Gera um token aleatório e um hash seguro para armazenar
-    const rawToken = crypto.randomBytes(32).toString('hex');
-    const tokenHash = crypto.createHash('sha256').update(rawToken).digest('hex');
-
-    // Define validade de 1 hora
+    const rawToken = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(rawToken).digest("hex");
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
 
-    // Salva no banco (invalida tokens antigos)
     await prisma.passwordReset.create({
-      data: {
-        userId: user.id,
-        tokenHash,
-        expiresAt,
-      },
+      data: { userId: user.id, tokenHash, expiresAt },
     });
 
-    // Simula envio de email com link
     const resetLink = `${process.env.FRONTEND_URL}/reset-password?token=${rawToken}`;
-    console.log(`(Simulação) Enviar e-mail para ${email}: ${resetLink}`);
 
-    return success(res, null, 'Se houver uma conta com o email informado, um link foi enviado.');
+    const emailHtml = `
+      <h2>Redefinição de senha</h2>
+      <p>Olá ${user.name},</p>
+      <p>Você solicitou a redefinição de senha. Clique no link abaixo para criar uma nova senha:</p>
+      <a href="${resetLink}" target="_blank">Redefinir senha</a>
+      <p>Se você não solicitou, ignore este e-mail.</p>
+      <p>Atenciosamente,<br/>Equipe Solaire</p>
+    `;
+
+    await sendEmail(user.email, "Redefinição de senha Solaire", emailHtml);
+
+    return success(res, null, "Se houver uma conta com o email informado, um link foi enviado.");
   } catch (err) {
     next(err);
   }
 }
-
 
 // ==================== RESETAR A SENHA ====================
 async function resetPassword(req, res, next) {
@@ -246,16 +264,10 @@ async function resetPassword(req, res, next) {
       return fail(res, 'O token e a nova senha são obrigatórios.');
     }
 
-    // Gera hash do token recebido (para comparar)
     const tokenHash = crypto.createHash('sha256').update(token).digest('hex');
 
-    // Busca o registro correspondente e ainda válido
     const resetRecord = await prisma.passwordReset.findFirst({
-      where: {
-        tokenHash,
-        used: false,
-        expiresAt: { gt: new Date() },
-      },
+      where: { tokenHash, used: false, expiresAt: { gt: new Date() } },
       include: { user: true },
     });
 
@@ -263,7 +275,6 @@ async function resetPassword(req, res, next) {
       return fail(res, 'Token inválido ou expirado.', 401);
     }
 
-    // Criptografa e atualiza senha
     const hashed = await bcrypt.hash(newPassword, 10);
 
     await prisma.$transaction([
@@ -283,7 +294,6 @@ async function resetPassword(req, res, next) {
   }
 }
 
-
 // ==================== EXPORTAÇÕES ====================
 module.exports = {
   registerResidentialUser,
@@ -292,6 +302,6 @@ module.exports = {
   getMe,
   getResidentialSummary,
   listUsers,
-  requestPasswordReset, // Função adicionada
-  resetPassword,        // Função adicionada
+  requestPasswordReset,
+  resetPassword,
 };
