@@ -12,7 +12,7 @@ const {
 const autenticar = require("../middleware/auth");
 
 // POST /measurements → cria uma nova medição
-router.post("/", autenticar, ingestMeasurement);
+router.post("/", ingestMeasurement);
 
 // POST /measurements/ping → teste de autenticação
 router.post("/ping", autenticar, ping);
