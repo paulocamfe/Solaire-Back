@@ -4,10 +4,13 @@ const { success, fail } = require('../helpers/response');
 async function ingestMeasurement(req, res, next) {
     try {
         const serial = req.body.serial && String(req.body.serial).trim();
-        const { energia_kWh, status } = req.body; // Adicionei 'status' caso o painel envie
+        
+        // 1. Receber TODOS os dados do corpo da requisição
+        const { potencia_W, temperatura, tensao, corrente, status } = req.body;
 
-        if (!serial || typeof energia_kWh !== 'number') {
-            return res.status(400).json({ error: 'Serial e energia_kWh são obrigatórios e válidos.' });
+        // 2. Validação principal (ainda baseada no serial e potência)
+        if (!serial || typeof potencia_W !== 'number') {
+            return res.status(400).json({ error: 'Serial e potencia_W (numérico) são obrigatórios.' });
         }
 
         const panel = await prisma.panel.findUnique({
@@ -19,24 +22,38 @@ async function ingestMeasurement(req, res, next) {
             return res.status(401).json({ error: 'Painel não autorizado ou não provisionado.' });
         }
 
+        // 3. Cálculo de energia (continua o mesmo)
+        const intervaloSegundos = 5.0; // Baseado no delay(5000) do Arduino
+        const energia_kWh = (potencia_W / 1000.0) * (intervaloSegundos / 3600.0);
+
+        // 4. Salvar TUDO no banco
         const newMeasurement = await prisma.measurement.create({
             data: {
                 panelId: panel.id,
-                energia_kWh: energia_kWh,
-                status: status || 'OK', // Usa o status enviado ou um padrão
+                energia_kWh: energia_kWh, // O valor calculado
+                status: status || 'OK',
                 timestamp: new Date(),
+
+                // --- SALVANDO OS NOVOS DADOS ---
+                potencia_W: potencia_W,
+                temperatura: temperatura,
+                tensao: tensao,
+                corrente: corrente
             },
         });
 
+        // (O resto da função continua igual: update no lastSeen e resposta 202)
+        // ...
         await prisma.panel.update({
-            where: { id: panel.id },
-            data: { lastSeen: new Date() },
+             where: { id: panel.id },
+             data: { lastSeen: new Date() },
         });
 
         return res.status(202).json({
-            message: 'Medição registrada com sucesso.',
-            id: newMeasurement.id,
+             message: 'Medição registrada com sucesso.',
+             id: newMeasurement.id,
         });
+
     } catch (err) {
         next(err);
     }
