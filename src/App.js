@@ -45,29 +45,36 @@ app.use(
 app.use(express.json());
 
 // ================= CORS CONFIGURATION (CORRECTED) =================
-// Lista de URLs que podem fazer requisições à sua API
+// ================= CORS CONFIGURATION (SAFE + MOBILE FRIENDLY) =================
 const allowedOrigins = [
   'http://localhost:3333',
   'http://localhost:8081',
-  'http://localhost:3000', // URL do seu Next.js em desenvolvimento
-  process.env.FRONTEND_URL, // URL do seu site em produção (lida do .env)
+  'http://localhost:3000',
+  process.env.FRONTEND_URL,
 ];
 
 app.use(
   cors({
     origin: function (origin, callback) {
-      // Permite requisições sem 'origin' (como Postman)
+      // 🔹 Permite chamadas sem 'origin' (como do Expo Go, app físico ou Postman)
       if (!origin) return callback(null, true);
-      
-      // Se a origem da requisição estiver na nossa lista de permissões, permita
-      if (allowedOrigins.indexOf(origin) === -1) {
-        const msg = 'A política de CORS para este site não permite acesso da Origem especificada.';
-        return callback(new Error(msg), false);
+
+      // 🔹 Permite qualquer URL que contenha um dos domínios conhecidos
+      const isAllowed = allowedOrigins.some((allowed) => {
+        if (!allowed) return false;
+        return origin.includes(allowed);
+      });
+
+      if (isAllowed) {
+        return callback(null, true);
+      } else {
+        console.warn(`🚫 CORS bloqueou origem: ${origin}`);
+        return callback(new Error('CORS bloqueou esta origem.'), false);
       }
-      return callback(null, true);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true, // permite envio de cookies/tokens, se precisar
   })
 );
 
