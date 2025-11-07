@@ -7,30 +7,18 @@ const crypto = require("crypto");
 const prisma = new PrismaClient();
 
 // ==================== CONFIGURAÇÃO DE EMAIL ====================
-let transporter;
-try {
-    if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-        transporter = nodemailer.createTransport({
-            service: process.env.EMAIL_SERVICE || undefined,
-            host: process.env.EMAIL_HOST || undefined,
-            port: process.env.EMAIL_PORT ? parseInt(process.env.EMAIL_PORT, 10) : 587,
-            secure: process.env.EMAIL_SECURE === "true",
-            auth: {
-                user: process.env.EMAIL_USER,
-                pass: process.env.EMAIL_PASS,
-            },
-        });
-    }
-} catch (err) {
-    console.error(" Erro ao configurar transporte de email:", err);
-    transporter = null;
-}
+const transporter = nodemailer.createTransport({
+    service: process.env.EMAIL_SERVICE || undefined, // Ex: "gmail" ou deixe vazio se usar host customizado
+    host: process.env.EMAIL_HOST || undefined,
+    port: process.env.EMAIL_PORT ? parseInt(process.env.EMAIL_PORT, 10) : 587,
+    secure: process.env.EMAIL_SECURE === "true",
+    auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS,
+    },
+});
 
 async function sendEmail(to, subject, html) {
-    if (!transporter) {
-        console.log(` (Simulado) Email para ${to}: ${subject}`);
-        return;
-    }
     try {
         await transporter.sendMail({
             from: `"Solaire ☀️" <${process.env.EMAIL_USER}>`,
@@ -38,7 +26,7 @@ async function sendEmail(to, subject, html) {
             subject,
             html,
         });
-        console.log(` Email enviado para ${to}`);
+        console.log(`📨 Email enviado para ${to}`);
     } catch (err) {
         console.error("Erro ao enviar email:", err);
         throw err;
@@ -72,13 +60,14 @@ async function registerResidentialUser(req, res, next) {
             data: { name, email, password: hashed, cpf, role: "RESIDENTIAL" },
         });
 
+        // Envia e-mail de boas-vindas
         await sendEmail(
             user.email,
             "Bem-vindo à Solaire ☀️",
             `<h2>Olá, ${user.name}!</h2>
-            <p>Seu cadastro na <b>Solaire</b> foi realizado com sucesso.</p>
-            <p>Agora você pode acessar seu painel e acompanhar o desempenho de suas placas solares!</p>
-            <br/><p>Equipe Solaire ☀️</p>`
+       <p>Seu cadastro na <b>Solaire</b> foi realizado com sucesso.</p>
+       <p>Agora você pode acessar seu painel e acompanhar o desempenho de suas placas solares!</p>
+       <br/><p>Equipe Solaire ☀️</p>`
         );
 
         return success(
@@ -87,13 +76,12 @@ async function registerResidentialUser(req, res, next) {
             "Usuário residencial registrado com sucesso"
         );
     } catch (err) {
-        console.error(" Erro no registro residencial:", err);
-        return fail(res, "Erro interno no servidor.", 500);
+        next(err);
     }
 }
 
 // ==================== REGISTRO EMPRESARIAL ====================
-async function registerBusinessUser(req, res) {
+async function registerBusinessUser(req, res, next) {
     try {
         const { userName, userEmail, password, companyName, companyCnpj } = req.body;
 
@@ -135,14 +123,15 @@ async function registerBusinessUser(req, res) {
             return { user: newUser, company: newCompany };
         });
 
+        // Envia e-mail de boas-vindas empresarial
         await sendEmail(
             result.user.email,
             "Cadastro empresarial - Solaire ☀️",
             `<h2>Olá, ${result.user.name}!</h2>
-            <p>Seu cadastro empresarial na <b>Solaire</b> foi concluído com sucesso.</p>
-            <p>Empresa: <b>${result.company.name}</b></p>
-            <p>Agora você pode gerenciar suas filiais e acompanhar a geração de energia da sua empresa.</p>
-            <br/><p>Equipe Solaire ☀️</p>`
+       <p>Seu cadastro empresarial na <b>Solaire</b> foi concluído com sucesso.</p>
+       <p>Empresa: <b>${result.company.name}</b></p>
+       <p>Agora você pode gerenciar suas filiais e acompanhar a geração de energia da sua empresa.</p>
+       <br/><p>Equipe Solaire ☀️</p>`
         );
 
         return success(
@@ -154,13 +143,12 @@ async function registerBusinessUser(req, res) {
             "Empresa e usuário administrador registrados com sucesso"
         );
     } catch (err) {
-        console.error("Erro no registro empresarial:", err);
-        return fail(res, "Erro interno no servidor.", 500);
+        next(err);
     }
 }
 
 // ==================== LOGIN ====================
-async function loginUser(req, res) {
+async function loginUser(req, res, next) {
     try {
         const { email, password } = req.body;
         if (!email || !password) return fail(res, "Preencha todos os campos");
@@ -183,13 +171,12 @@ async function loginUser(req, res) {
             "Login realizado com sucesso"
         );
     } catch (err) {
-        console.error(" Erro no login:", err);
-        return fail(res, "Erro interno no servidor.", 500);
+        next(err);
     }
 }
 
 // ==================== DADOS DO USUÁRIO ====================
-async function getMe(req, res) {
+async function getMe(req, res, next) {
     try {
         const user = await prisma.user.findUnique({
             where: { id: req.user.id },
@@ -199,13 +186,12 @@ async function getMe(req, res) {
         if (!user) return fail(res, "Usuário não encontrado", 404);
         return success(res, user, "Usuário autenticado com sucesso");
     } catch (err) {
-        console.error(" Erro ao buscar usuário:", err);
-        return fail(res, "Erro interno no servidor.", 500);
+        next(err);
     }
 }
 
 // ==================== RESUMO RESIDENCIAL ====================
-async function getResidentialSummary(req, res) {
+async function getResidentialSummary(req, res, next) {
     try {
         const userId = req.user.id;
         const days = parseInt(req.query.days, 10) || 30;
@@ -236,8 +222,88 @@ async function getResidentialSummary(req, res) {
             co2EvitadoKg: parseFloat(co2EvitadoKg.toFixed(2)),
         });
     } catch (err) {
-        console.error(" Erro no resumo residencial:", err);
-        return fail(res, "Erro interno no servidor.", 500);
+        next(err);
+    }
+}
+
+// ==================== LISTAR USUÁRIOS ====================
+async function listUsers(req, res, next) {
+    try {
+        const users = await prisma.user.findMany({
+            select: { id: true, name: true, email: true, role: true },
+        });
+        return success(res, users, "Lista de usuários");
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
+async function requestPasswordReset(req, res, next) {
+    try {
+        const { email } = req.body;
+        if (!email) return fail(res, "O campo email é obrigatório.");
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user)
+            return success(res, null, "Se houver uma conta com o email informado, um código foi enviado.");
+
+        const code = Math.floor(100000 + Math.random() * 900000).toString();
+        const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+        const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+
+        // Deleta códigos antigos e cria o novo
+        await prisma.passwordReset.deleteMany({ where: { userId: user.id, used: false } });
+
+        await prisma.passwordReset.create({
+            data: { userId: user.id, tokenHash: codeHash, expiresAt },
+        });
+
+        const emailHtml = `
+      <h2>Redefinição de senha</h2>
+      <p>Olá ${user.name},</p>
+      <p>Use o código abaixo para redefinir sua senha:</p>
+      <h1 style="letter-spacing: 4px;">${code}</h1>
+      <p>O código expira em 15 minutos.</p>
+      <br/>
+      <p>Equipe Solaire ☀️</p>
+    `;
+
+        await sendEmail(user.email, "Código de redefinição de senha Solaire", emailHtml);
+        return success(res, null, "Se houver uma conta com o email informado, um código foi enviado.");
+    } catch (err) {
+        next(err);
+    }
+}
+
+// ==================== RESETAR SENHA ====================
+async function resetPassword(req, res, next) {
+    try {
+        const { email, code, newPassword } = req.body;
+        if (!email || !code || !newPassword)
+            return fail(res, "E-mail, código e nova senha são obrigatórios.");
+
+        const user = await prisma.user.findUnique({ where: { email } });
+        if (!user) return fail(res, "Usuário não encontrado.", 404);
+
+        const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+
+        const resetRecord = await prisma.passwordReset.findFirst({
+            where: { userId: user.id, tokenHash: codeHash, used: false, expiresAt: { gt: new Date() } },
+        });
+
+        if (!resetRecord) return fail(res, "Código inválido ou expirado.", 401);
+
+        const hashedPassword = await bcrypt.hash(newPassword, 10);
+
+        await prisma.$transaction([
+            prisma.user.update({ where: { id: user.id }, data: { password: hashedPassword } }),
+            prisma.passwordReset.update({ where: { id: resetRecord.id }, data: { used: true } }),
+        ]);
+
+        return success(res, null, "Senha redefinida com sucesso.");
+    } catch (err) {
+        next(err);
     }
 }
 
@@ -248,4 +314,7 @@ module.exports = {
     loginUser,
     getMe,
     getResidentialSummary,
+    listUsers,
+    requestPasswordReset,
+    resetPassword,
 };
