@@ -20,6 +20,7 @@ model User {
  // --- Métricas para RESIDENTIAL ---
  tarifaKwh Float? @default(0.75)
  fatorCo2Kwh Float? @default(0.0718)
+  
 
  createdAt DateTime @default(now())
 updatedAt  DateTime @updatedAt
