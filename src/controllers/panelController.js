@@ -61,12 +61,9 @@ async function addPanel(req, res, next) {
                 data: {
                     serial,
                     location,
-                    model: model || 'Genérico', 
+                    model: model || 'Genérico',
                     user: { connect: { id: userId } },
                     status: 'Ativa',
-                    energia_kWh: 0,
-                    tensao: 0,
-                    temperatura: 0
                 }
             });
 
@@ -119,11 +116,8 @@ async function addPanel(req, res, next) {
                     serial,
                     location,
                     model,
-                    user: { connect: { id: user.id } }, // ✅ jeito correto
                     status,
-                    energia_kWh: 0,
-                    tensao: 0,
-                    temperatura: 0,
+                    user: { connect: { id: user.id } },
                 },
             });
 
