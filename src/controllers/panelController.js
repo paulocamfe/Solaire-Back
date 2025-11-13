@@ -118,36 +118,38 @@ async function addPanel(req, res, next) {
                 data: {
                     serial,
                     location,
-                    model: model || 'Genérico', // ✅ Valor padrão se não enviado
-                    branchId: branchId,
-                    status: 'Ativa',
+                    model,
+                    user: { connect: { id: user.id } }, // ✅ jeito correto
+                    status,
                     energia_kWh: 0,
                     tensao: 0,
-                    temperatura: 0
-                }
+                    temperatura: 0,
+                },
             });
 
-            console.log('✅ Painel empresarial criado:', newPanel);
-            return success(res, { panel: newPanel }, 'Painel empresarial adicionado com sucesso.');
-        }
+        });
+
+        console.log('✅ Painel empresarial criado:', newPanel);
+        return success(res, { panel: newPanel }, 'Painel empresarial adicionado com sucesso.');
+    }
 
         // Caso o role não seja reconhecido
         return fail(res, 'Tipo de usuário não suportado.', 400);
 
-    } catch (err) {
-        console.error('❌ Erro no addPanel:', err);
+} catch (err) {
+    console.error('❌ Erro no addPanel:', err);
 
-        if (err.code === 'P2002' && err.meta?.target?.includes('serial')) {
-            return fail(res, 'Já existe um painel com este número de serial.', 409);
-        }
-
-        // Outros erros do Prisma
-        if (err.code === 'P2025') {
-            return fail(res, 'Registro não encontrado no banco de dados.', 404);
-        }
-
-        return fail(res, 'Erro interno do servidor ao adicionar painel.', 500);
+    if (err.code === 'P2002' && err.meta?.target?.includes('serial')) {
+        return fail(res, 'Já existe um painel com este número de serial.', 409);
     }
+
+    // Outros erros do Prisma
+    if (err.code === 'P2025') {
+        return fail(res, 'Registro não encontrado no banco de dados.', 404);
+    }
+
+    return fail(res, 'Erro interno do servidor ao adicionar painel.', 500);
+}
 }
 
 // ==================== LISTAR PAINÉIS DO USUÁRIO ====================
