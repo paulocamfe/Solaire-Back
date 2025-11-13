@@ -127,8 +127,6 @@ async function addPanel(req, res, next) {
                 },
             });
 
-        });
-
         console.log('✅ Painel empresarial criado:', newPanel);
         return success(res, { panel: newPanel }, 'Painel empresarial adicionado com sucesso.');
     }
