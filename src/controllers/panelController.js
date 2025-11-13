@@ -1,4 +1,4 @@
-const { prisma } = require('../prismaClient');
+const prisma = require('../prismaClient');
 const { success, fail } = require('../helpers/response');
 
 // ==================== ADICIONAR UM PAINEL ====================
