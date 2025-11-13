@@ -11,6 +11,7 @@
         resetPassword
     } = require('../controllers/userController');
     const autenticar = require('../middleware/auth');
+    const { deleteUser } = require('../controllers/userController.js');
 
     // =================== Rotas públicas ===================
 
@@ -39,5 +40,8 @@
 
     // Lista todos os usuários (geralmente para administradores)
     router.get('/', autenticar, listUsers);
+
+    // Deleta um usuário 
+    router.delete('/:id', deleteUser);
 
     module.exports = router;

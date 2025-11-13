@@ -1,133 +1,129 @@
-// authController.js
+require('dotenv').config();
 
-// Eu preciso importar o bcrypt para criptografar a senha
-const bcrypt = require('bcrypt');
-// Eu preciso do crypto para gerar um token de verificação seguro
-const crypto = require('crypto');
-// Eu vou usar o prismaClient que eu já configurei, e não criar um novo
-const { prisma } = require('./prismaClient.js');
-// Eu vou usar o meu helper 'mailer.js' para enviar e-mails
-const { sendMail } = require('./helpers/mailer.js');
+const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const logger = require('./helpers/logger');
+const prisma = require('./prismaClient');   
 
-// Pego a URL base da minha API e do meu Front-end do .env
-// Isso é essencial para montar o link de verificação
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3333';
-const FRONTEND_LOGIN_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:3000/login';
+// =================== ROTAS ===================
+const usersRouter = require('./Routes/userRoutes');
+const panelsRouter = require('./Routes/panelRoutes');
+const measurementsRouter = require('./Routes/measurementRoutes');
+const newsletterRouter = require('./Routes/newsletterRoutes');
+const companyRoutes = require('./Routes/companyRoutes');
+const branchRoutes = require('./Routes/branchRoutes');
+const authRoutes = require('./Routes/authRoutes'); // rotas de autenticação
 
-// =============== CRIAR CONTA (registerUser) ===============
-const registerUser = async (req, res) => {
+// =================== SWAGGER ===================
+const swaggerJsdoc = require('swagger-jsdoc');
+const swaggerUi = require('swagger-ui-express');
+const swaggerSpec = swaggerJsdoc({
+  definition: {
+    openapi: '3.0.0',
+    info: { title: 'Solaire API', version: '1.0.0' },
+  },
+  apis: ['./Routes/*.js'],
+});
+
+const app = express();
+let server;
+
+// =================== MIDDLEWARE ===================
+app.use(helmet());
+if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
+
+app.use(
+  rateLimit({
+    windowMs: 15 * 60 * 1000, // 15 minutos
+    max: 200,
+  })
+);
+
+app.use(express.json());
+
+// =================== CORS ===================
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+
+app.use(
+  cors({
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true);
+      const isAllowed = allowedOrigins.some((allowed) => origin.includes(allowed));
+      if (isAllowed) return callback(null, true);
+      console.warn(`🚫 CORS bloqueou origem: ${origin}`);
+      return callback(new Error('CORS bloqueou esta origem.'), false);
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+  })
+);
+
+// =================== SWAGGER ===================
+app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
+
+// =================== ROTAS ===================
+// Autenticação primeiro
+app.use('/auth', authRoutes);
+
+// Outras rotas
+app.use('/users', usersRouter);
+app.use('/panels', panelsRouter);
+app.use('/measurements', measurementsRouter);
+app.use('/newsletter', newsletterRouter);
+app.use('/companies', companyRoutes);
+app.use('/branches', branchRoutes);
+
+// Healthcheck
+app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
+
+// 404
+app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' }));
+
+// Error handler
+app.use((err, req, res, next) => {
+  console.error(err);
+  res.status(err.status || 500).json({
+    success: false,
+    error: err.message || 'Erro interno',
+    type: err.name || 'InternalError',
+  });
+});
+
+// =================== SHUTDOWN ===================
+async function shutdown(signal) {
+  logger.info(`Recebido ${signal}, finalizando...`);
   try {
-    // Pego os dados que o usuário enviou no corpo da requisição
-    const { name, email, password, cpf } = req.body;
-
-    // Verifico se esse e-mail já existe no banco
-    const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(400).json({ message: 'E-mail já cadastrado.' });
+    if (server) {
+      server.close(() => logger.info('Servidor encerrado.'));
     }
-
-    // Criptografo a senha antes de salvar no banco, por segurança
-    const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Gero um token de verificação longo e seguro
-    // Isso é muito melhor que um código de 6 dígitos
-    const verificationToken = crypto.randomBytes(32).toString('hex');
-
-    // Crio o novo usuário no banco
-    const newUser = await prisma.user.create({
-      data: {
-        name,
-        email,
-        password: hashedPassword,
-        cpf,
-        twoFactorCode: verificationToken, // Salvo o token no campo do 2FA
-        twoFactorExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // Token expira em 24 horas
-        twoFactorEnabled: false, // A conta começa como NÂO verificada
-      },
-    });
-
-    // Monto o link completo que o usuário vai clicar
-    const verificationLink = `${API_BASE_URL}/auth/verify-account?token=${verificationToken}`;
-
-    // Envio o e-mail usando meu helper
-    await sendMail({
-      to: email,
-      subject: 'Confirme seu E-mail - Ativação de Conta',
-      // O HTML do e-mail agora tem um botão com o link
-      html: `
-        <h2>Bem-vindo(a), ${name}!</h2>
-        <p>Obrigado por se cadastrar. Por favor, clique no botão abaixo para confirmar seu e-mail e ativar sua conta:</p>
-        <div style="margin-top: 20px;">
-            <a href="${verificationLink}" 
-               style="background-color: #4CAF50; color: white; padding: 10px 20px; text-align: center; text-decoration: none; display: inline-block; border-radius: 5px;">
-               Confirmar E-mail
-            </a>
-        </div>
-        <p style="margin-top: 20px; font-size: 12px; color: #888;">Se o botão não funcionar, copie e cole este link: <br> ${verificationLink}</p>
-        <p>Este link é válido por 24 horas.</p>
-      `,
-    });
-
-    // Respondo ao front-end que deu tudo certo
-    res.status(201).json({ message: 'Usuário criado! Verifique seu e-mail para ativar a conta.' });
-  } catch (error) {
-    console.error(error);
-    res.status(500).json({ message: 'Erro ao criar usuário.' });
+    await prisma.$disconnect();
+    logger.info('Conexão Prisma encerrada com sucesso.');
+    process.exit(0);
+  } catch (e) {
+    logger.error('Erro no shutdown:', e);
+    process.exit(1);
   }
-};
+}
 
-// =============== VERIFICAR CONTA VIA LINK (verifyAccount) ===============
-const verifyAccount = async (req, res) => {
-  try {
-    // Pego o token que veio na URL (ex: ...?token=meutoken123)
-    const { token } = req.query;
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('unhandledRejection', (reason) => {
+  logger.error('Unhandled Rejection:', reason);
+  shutdown('unhandledRejection');
+});
+process.on('uncaughtException', (err) => {
+  logger.error('Uncaught Exception:', err);
+  shutdown('uncaughtException');
+});
 
-    if (!token) {
-      // Se não veio token, é um erro
-      return res.status(400).send('<h1>Erro: Token de verificação ausente.</h1>');
-    }
+// =================== START SERVER ===================
+const PORT = process.env.PORT || 3333;
+server = app.listen(PORT, () => {
+  logger.info(`API rodando na porta ${PORT}`);
+});
 
-    // Busco o usuário que tem esse token salvo
-    const user = await prisma.user.findFirst({
-      where: { twoFactorCode: token },
-    });
-
-    // Se não achei o usuário, o link é inválido ou já foi usado
-    if (!user) {
-      return res.status(404).send('<h1>Erro: Link de verificação inválido ou já utilizado.</h1>');
-    }
-
-    // Verifico se o token já expirou
-    if (user.twoFactorExpires && new Date() > user.twoFactorExpires) {
-      return res.status(400).send('<h1>Erro: Link de verificação expirado.</h1> <p>Por favor, tente logar para receber um novo link.</p>');
-    }
-
-    // Se deu tudo certo:
-    // 1. Ativo a conta do usuário (twoFactorEnabled = true)
-    // 2. Limpo o token do banco (para não ser usado de novo)
-    await prisma.user.update({
-      where: { id: user.id },
-      data: {
-        twoFactorEnabled: true,
-        twoFactorCode: null, // Limpo o token
-        twoFactorExpires: null, // Limpo a expiração
-      },
-    });
-
-    // Mando o usuário de volta para a tela de login do meu front-end
-    // O .send() é só um fallback se o redirect falhar
-    res.redirect(FRONTEND_LOGIN_URL);
-
-  } catch (error) {
-    console.error('Erro na verificação de conta:', error);
-    // Retorno uma página de erro simples, já que isso é no navegador
-    res.status(500).send('<h1>Erro 500: Ocorreu um erro ao processar sua solicitação.</h1>');
-  }
-};
-
-
-// Eu preciso exportar as funções para as rotas poderem usá-las
-module.exports = {
-  registerUser,
-  verifyAccount,
-};
+module.exports = app;

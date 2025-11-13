@@ -7,8 +7,6 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// =================== MODELS ===================
-
 model User {
   id              Int       @id @default(autoincrement())
   name            String
@@ -17,35 +15,32 @@ model User {
   role            Role      @default(RESIDENTIAL)
   cpf             String?
 
-<<<<<<< HEAD
-  // --- Métricas para RESIDENTIAL ---
-  tarifaKwh       Float?    @default(0.75)
-  fatorCo2Kwh     Float?    @default(0.0718)
-
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
-  // --- Relações ---
-  company         Company?  @relation(fields: [companyId], references: [id])
-  companyId       Int?
-  panels          Panel[]
-  passwordResets  PasswordReset[]
-
-  // --- Autenticação de dois fatores ---
   twoFactorEnabled Boolean   @default(false)
   twoFactorCode     String?  
   twoFactorExpires  DateTime?
+
+  companyId       Int?
+  company         Company?  @relation(fields: [companyId], references: [id])
+  panels          Panel[]
+  passwordResets  PasswordReset[]
+}
+
+enum Role {
+  RESIDENTIAL
+  BUSINESS
 }
 
 model Company {
   id        Int      @id @default(autoincrement())
   name      String
   cnpj      String   @unique
-  // A relação inversa para 'company' em User
   users     User[]
   branches  Branch[]
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 }
 
 model Branch {
@@ -54,15 +49,11 @@ model Branch {
   address   String
   companyId Int
   company   Company @relation(fields: [companyId], references: [id])
-
-  panels Panel[]
-
-  // --- Métricas para BUSINESS (por filial) ---
+  panels    Panel[]
   tarifaKwh   Float @default(0.75)
   fatorCo2Kwh Float @default(0.0718)
-
   createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  updatedAt DateTime @default(now())
 }
 
 model Panel {
@@ -74,24 +65,15 @@ model Panel {
   lastSeen    DateTime?
   status      String?
 
-  // --- RELACIONAMENTO DUPLO ---
   userId Int?
-  // A relação inversa para 'panels' em User
-  user   User?   @relation(fields: [userId], references: [id])
+  user   User? @relation(fields: [userId], references: [id])
 
   branchId Int?
   branch   Branch? @relation(fields: [branchId], references: [id])
 
   measurements Measurement[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-}
-
-// =================== OUTROS MODELS ===================
-
-enum Role {
-  RESIDENTIAL
-  BUSINESS
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @default(now())
 }
 
 model Measurement {
@@ -127,5 +109,4 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
 }
-
 

@@ -1,55 +1,49 @@
-// authController.js
+// src/controllers/authController.js
 
 const bcrypt = require('bcrypt');
 const crypto = require('crypto');
-// Usando o cliente Prisma centralizado
-const { prisma } = require('../prismaClient');
+const prisma = require('../prismaClient');
 const { sendMail } = require('../helpers/mailer.js');
 
-// URLs base para montar os links de verificação e redirecionamento
-const API_BASE_URL = process.env.API_BASE_URL || 'http://localhost:3333';
-const FRONTEND_LOGIN_URL = process.env.FRONTEND_LOGIN_URL || 'http://localhost:3000/login';
-
 /**
- * Registra um novo usuário, envia e-mail de verificação.
+ * Registra um novo usuário e envia e-mail de confirmação
  */
 const registerUser = async (req, res) => {
   try {
     const { name, email, password, cpf } = req.body;
 
+    // Verifica se já existe usuário com o mesmo e-mail
     const existing = await prisma.user.findUnique({ where: { email } });
-    if (existing) {
-      return res.status(400).json({ message: 'E-mail já cadastrado.' });
-    }
+    if (existing) return res.status(400).json({ message: 'E-mail já cadastrado.' });
 
     const hashedPassword = await bcrypt.hash(password, 10);
-
-    // Gera um token hexadecimal seguro para verificação de e-mail
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    const newUser = await prisma.user.create({
+    // Cria usuário no banco
+    await prisma.user.create({
       data: {
         name,
         email,
         password: hashedPassword,
         cpf,
-        twoFactorCode: verificationToken, // Salva o token de verificação
-        twoFactorExpires: new Date(Date.now() + 24 * 60 * 60 * 1000), // Expira em 24h
-        twoFactorEnabled: false, // Conta começa como não verificada
+        twoFactorCode: verificationToken,
+        twoFactorExpires: new Date(Date.now() + 24*60*60*1000), // Expira em 24h
+        twoFactorEnabled: false,
       },
     });
 
-    // Monta o link de verificação que será enviado por e-mail
-    const verificationLink = `${API_BASE_URL}/auth/verify-account?token=${verificationToken}`;
+    // Deep link para o app Expo
+    const deepLink = `solaireapp://confirmacao-email?token=${verificationToken}`;
 
+    // Envia e-mail com botão
     await sendMail({
       to: email,
       subject: 'Confirme seu E-mail - Ativação de Conta',
       html: `
         <h2>Bem-vindo(a), ${name}!</h2>
         <p>Clique no botão abaixo para confirmar seu e-mail e ativar sua conta:</p>
-        <a href="${verificationLink}" 
-           style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px;">
+        <a href="${deepLink}" 
+           style="background-color: #FFD700; color: black; padding: 10px 20px; text-decoration: none; border-radius: 12px;">
            Confirmar E-mail
         </a>
         <p>Este link é válido por 24 horas.</p>
@@ -57,6 +51,7 @@ const registerUser = async (req, res) => {
     });
 
     res.status(201).json({ message: 'Usuário criado! Verifique seu e-mail para ativar a conta.' });
+
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: 'Erro ao criar usuário.' });
@@ -64,44 +59,31 @@ const registerUser = async (req, res) => {
 };
 
 /**
- * Verifica a conta do usuário a partir do token recebido no link (GET).
+ * Verifica a conta do usuário a partir do token recebido no deep link
  */
 const verifyAccount = async (req, res) => {
   try {
-    // Token é pego da query string da URL
     const { token } = req.query;
+    if (!token) return res.status(400).send('Token de verificação ausente.');
 
-    if (!token) {
-      return res.status(400).send('Token de verificação ausente.');
-    }
+    const user = await prisma.user.findFirst({ where: { twoFactorCode: token } });
+    if (!user) return res.status(404).send('Link de verificação inválido ou já utilizado.');
 
-    // Busca o usuário pelo token de verificação
-    const user = await prisma.user.findFirst({
-      where: { twoFactorCode: token },
-    });
-
-    // Se o token não existe ou já foi usado, o usuário não é encontrado
-    if (!user) {
-      return res.status(404).send('Link de verificação inválido ou já utilizado.');
-    }
-
-    // Verifica se o token expirou
-    if (user.twoFactorExpires && new Date() > user.twoFactorExpires) {
+    if (user.twoFactorExpires && new Date() > user.twoFactorExpires)
       return res.status(400).send('Link de verificação expirado.');
-    }
 
-    // Atualiza o usuário para ativar a conta e limpar o token
     await prisma.user.update({
       where: { id: user.id },
       data: {
-        twoFactorEnabled: true, // Ativa a conta
-        twoFactorCode: null, // Limpa o token para não ser reutilizado
+        twoFactorEnabled: true,
+        twoFactorCode: null,
         twoFactorExpires: null,
       },
     });
 
-    // Redireciona o usuário para a página de login no front-end
-    res.redirect(FRONTEND_LOGIN_URL);
+    // Retorna JSON com deep link (app Expo vai interpretar)
+    const deepLink = `solaireapp://confirmacao-email?token=${token}`;
+    res.json({ message: 'Conta verificada!', deepLink });
 
   } catch (error) {
     console.error('Erro na verificação de conta:', error);
@@ -109,7 +91,21 @@ const verifyAccount = async (req, res) => {
   }
 };
 
+/**
+ * Login opcional via token (para deep link ou integração externa)
+ */
+const loginWithToken = async (req, res) => {
+  const { token } = req.body;
+  try {
+    // Aqui você validaria o token (JWT ou API externa)
+    res.json({ message: 'Login feito com sucesso!' });
+  } catch (e) {
+    res.status(400).json({ message: 'Token inválido.' });
+  }
+};
+
 module.exports = {
   registerUser,
   verifyAccount,
+  loginWithToken,
 };
