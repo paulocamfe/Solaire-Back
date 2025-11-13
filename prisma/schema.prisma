@@ -10,28 +10,30 @@ generator client {
 // =================== MODELS ===================
 
 model User {
- id Int @id @default(autoincrement())
- name String
- email String @unique
- password String
- role Role @default(RESIDENTIAL)
- cpf  String?
+  id              Int       @id @default(autoincrement())
+  name            String
+  email           String    @unique
+  password        String
+  role            Role      @default(RESIDENTIAL)
+  cpf             String?
 
- // --- Métricas para RESIDENTIAL ---
- tarifaKwh Float? @default(0.75)
- fatorCo2Kwh Float? @default(0.0718)
+  // --- Métricas para RESIDENTIAL ---
+  tarifaKwh       Float?    @default(0.75)
+  fatorCo2Kwh     Float?    @default(0.0718)
 
- createdAt DateTime @default(now())
-updatedAt  DateTime @updatedAt
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
 
- // --- Relações CORRIGIDAS ---
- company  Company? @relation(fields: [companyId], references: [id])
- companyId Int?
+  // --- Relações ---
+  company         Company?  @relation(fields: [companyId], references: [id])
+  companyId       Int?
+  panels          Panel[]
+  passwordResets  PasswordReset[]
 
- panels Panel[]
- 
- // A relação inversa que aponta para a tabela PasswordReset
- passwordResets PasswordReset[]
+  // --- Autenticação de dois fatores ---
+  twoFactorEnabled Boolean   @default(false)
+  twoFactorCode     String?  
+  twoFactorExpires  DateTime?
 }
 
 model Company {
@@ -124,3 +126,5 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
 }
+
+
