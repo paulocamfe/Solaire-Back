@@ -2,11 +2,14 @@ const { prisma } = require('../prismaClient');
 const { success, fail } = require('../helpers/response');
 
 // ==================== ADICIONAR UM PAINEL ====================
+
 async function addPanel(req, res, next) {
+    console.log('🧾 Header authorization:', req.headers.authorization);
+    console.log('👤 req.user:', req.user);
     try {
         console.log('📥 Dados recebidos no addPanel:', req.body);
         console.log('👤 Usuário autenticado:', req.user);
-        
+
         const userId = req.user.id;
         const { serial, location, model, branchId } = req.body;
 
@@ -21,7 +24,7 @@ async function addPanel(req, res, next) {
             return fail(res, 'Localização é obrigatória.', 400);
         }
 
-        const user = await prisma.user.findUnique({ 
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { company: true }
         });
@@ -35,10 +38,10 @@ async function addPanel(req, res, next) {
         // --- USUÁRIO RESIDENCIAL ---
         if (user.role === 'RESIDENTIAL') {
             console.log('🏠 Usuário residencial detectado');
-            
+
             // Verificar se placa já existe
             const existingPanel = await prisma.panel.findFirst({
-                where: { 
+                where: {
                     serial: serial,
                     userId: userId
                 }
@@ -55,9 +58,9 @@ async function addPanel(req, res, next) {
             }
 
             const newPanel = await prisma.panel.create({
-                data: { 
-                    serial, 
-                    location, 
+                data: {
+                    serial,
+                    location,
                     model: model || 'Genérico', // ✅ Valor padrão se não enviado
                     userId: userId,
                     status: 'Ativa',
@@ -74,7 +77,7 @@ async function addPanel(req, res, next) {
         // --- USUÁRIO EMPRESARIAL ---
         if (user.role === 'BUSINESS') {
             console.log('🏢 Usuário empresarial detectado');
-            
+
             if (!branchId) {
                 return fail(res, 'Para contas empresariais, é necessário informar a filial (branchId).', 400);
             }
@@ -85,12 +88,12 @@ async function addPanel(req, res, next) {
             }
 
             const branch = await prisma.branch.findFirst({
-                where: { 
-                    id: branchId, 
-                    companyId: user.companyId 
+                where: {
+                    id: branchId,
+                    companyId: user.companyId
                 }
             });
-            
+
             if (!branch) {
                 console.log('❌ Filial não encontrada:', { branchId, companyId: user.companyId });
                 return fail(res, 'Filial não encontrada ou não pertence à sua empresa.', 404);
@@ -98,7 +101,7 @@ async function addPanel(req, res, next) {
 
             // Verificar se placa já existe na empresa
             const existingPanel = await prisma.panel.findFirst({
-                where: { 
+                where: {
                     serial: serial,
                     branch: {
                         companyId: user.companyId
@@ -112,9 +115,9 @@ async function addPanel(req, res, next) {
             }
 
             const newPanel = await prisma.panel.create({
-                data: { 
-                    serial, 
-                    location, 
+                data: {
+                    serial,
+                    location,
                     model: model || 'Genérico', // ✅ Valor padrão se não enviado
                     branchId: branchId,
                     status: 'Ativa',
@@ -131,18 +134,18 @@ async function addPanel(req, res, next) {
         // Caso o role não seja reconhecido
         return fail(res, 'Tipo de usuário não suportado.', 400);
 
-    } catch(err) {
+    } catch (err) {
         console.error('❌ Erro no addPanel:', err);
-        
+
         if (err.code === 'P2002' && err.meta?.target?.includes('serial')) {
             return fail(res, 'Já existe um painel com este número de serial.', 409);
         }
-        
+
         // Outros erros do Prisma
         if (err.code === 'P2025') {
             return fail(res, 'Registro não encontrado no banco de dados.', 404);
         }
-        
+
         return fail(res, 'Erro interno do servidor ao adicionar painel.', 500);
     }
 }
@@ -151,15 +154,15 @@ async function addPanel(req, res, next) {
 async function listMyPanels(req, res, next) {
     try {
         const userId = req.user.id;
-        const user = await prisma.user.findUnique({ 
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { company: true }
         });
-        
+
         let panels;
 
         if (user.role === 'RESIDENTIAL') {
-            panels = await prisma.panel.findMany({ 
+            panels = await prisma.panel.findMany({
                 where: { userId: userId },
                 orderBy: { createdAt: 'desc' }
             });
@@ -168,14 +171,14 @@ async function listMyPanels(req, res, next) {
         if (user.role === 'BUSINESS') {
             panels = await prisma.panel.findMany({
                 where: { branch: { companyId: user.companyId } },
-                include: { 
-                    branch: { 
-                        select: { 
+                include: {
+                    branch: {
+                        select: {
                             id: true,
                             name: true,
-                            address: true 
-                        } 
-                    } 
+                            address: true
+                        }
+                    }
                 },
                 orderBy: { createdAt: 'desc' }
             });
@@ -193,15 +196,15 @@ async function getPanelDetails(req, res, next) {
     try {
         const userId = req.user.id;
         const panelId = parseInt(req.params.id, 10);
-        
-        const user = await prisma.user.findUnique({ 
+
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { company: true }
         });
 
-        const panel = await prisma.panel.findUnique({ 
+        const panel = await prisma.panel.findUnique({
             where: { id: panelId },
-            include: { 
+            include: {
                 branch: true,
                 measurements: {
                     take: 10,
@@ -242,7 +245,7 @@ async function updatePanel(req, res, next) {
         const panelId = parseInt(req.params.id, 10);
         const { location, status } = req.body;
 
-        const user = await prisma.user.findUnique({ 
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { company: true }
         });
@@ -283,11 +286,11 @@ async function updatePanel(req, res, next) {
 
     } catch (err) {
         console.error('❌ Erro no updatePanel:', err);
-        
+
         if (err.code === 'P2025') {
             return fail(res, 'Painel não encontrado.', 404);
         }
-        
+
         next(err);
     }
 }
@@ -298,7 +301,7 @@ async function deletePanel(req, res, next) {
         const userId = req.user.id;
         const panelId = parseInt(req.params.id, 10);
 
-        const user = await prisma.user.findUnique({ 
+        const user = await prisma.user.findUnique({
             where: { id: userId },
             include: { company: true }
         });
@@ -335,11 +338,11 @@ async function deletePanel(req, res, next) {
 
     } catch (err) {
         console.error('❌ Erro no deletePanel:', err);
-        
+
         if (err.code === 'P2025') {
             return fail(res, 'Painel não encontrado.', 404);
         }
-        
+
         next(err);
     }
 }
