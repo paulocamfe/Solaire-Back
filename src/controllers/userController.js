@@ -2,8 +2,7 @@ const bcrypt = require("bcryptjs");
 const jwt = require("jsonwebtoken");
 const nodemailer = require("nodemailer");
 const crypto = require("crypto");
-const prisma = require('../prismaClient');
-
+const prisma = require("../prismaClient");
 
 // ==================== CONFIGURAÇÃO DE EMAIL ====================
 const transporter = nodemailer.createTransport({
@@ -40,22 +39,50 @@ const fail = (res, error, statusCode = 400) =>
   res.status(statusCode).json({ success: false, error });
 
 // ==================== DELETAR USUÁRIO ====================
-async function deleteUser(req, res) {
+const deleteUser = async (req, res) => {
   try {
-    const { id } = req.params;
-    const user = await prisma.user.findUnique({
-      where: { id: parseInt(id) },
-    });
-    if (!user)
-      return res.status(404).json({ message: "Usuário não encontrado." });
+    const { id, email, name, cpf, cnpj } = req.body; // campos adicionais
 
-    await prisma.user.delete({ where: { id: parseInt(id) } });
-    res.status(200).json({ message: "Usuário deletado com sucesso." });
+    if (!id && !email && !name && !cpf && !cnpj) {
+      return res
+        .status(400)
+        .json({
+          message:
+            "Informe id, email, nome, cpf ou cnpj para deletar o usuário.",
+        });
+    }
+
+    // Monta filtro dinamicamente
+    const filter = {};
+    if (id) filter.id = id;
+    if (email) filter.email = email;
+    if (name) filter.name = name;
+    if (cpf) filter.cpf = cpf;
+    if (cnpj) filter.company = { cnpj: cnpj }; // caso queira deletar usuário ligado a uma empresa pelo CNPJ
+
+    // Busca o usuário
+    const user = await prisma.user.findFirst({ where: filter });
+    if (!user) {
+      return res.status(404).json({ message: "Usuário não encontrado." });
+    }
+
+    // Deleta registros relacionados
+    await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+    await prisma.panel.updateMany({
+      where: { userId: user.id },
+      data: { userId: null },
+    });
+    // Adicione aqui outras tabelas que tenham FK para User se houver
+
+    // Deleta o usuário
+    await prisma.user.delete({ where: { id: user.id } });
+
+    res.json({ message: `Usuário ${user.name} deletado com sucesso!` });
   } catch (error) {
     console.error(error);
     res.status(500).json({ message: "Erro ao deletar usuário." });
   }
-}
+};
 
 // ==================== REGISTRO RESIDENCIAL ====================
 async function registerResidentialUser(req, res, next) {
@@ -146,7 +173,6 @@ async function registerBusinessUser(req, res, next) {
       });
       return { user: newUser, company: newCompany };
     });
-
 
     // Envia e-mail de boas-vindas empresarial
     await sendEmail(
