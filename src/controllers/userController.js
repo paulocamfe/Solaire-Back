@@ -41,7 +41,7 @@ const fail = (res, error, statusCode = 400) =>
 // ==================== DELETAR USUÁRIO ====================
 const deleteUser = async (req, res) => {
   try {
-    const { id, email, name, cpf, cnpj } = req.body; 
+    const { id, email, name, cpf, cnpj } = req.body;
 
     if (!id && !email && !name && !cpf && !cnpj) {
       return res
@@ -223,10 +223,16 @@ async function loginUser(req, res, next) {
     if (!valid) return fail(res, "Senha inválida", 401);
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+        companyId: user.companyId ?? null,
+      },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
     return success(
       res,

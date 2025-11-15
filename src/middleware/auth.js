@@ -17,7 +17,9 @@ module.exports = function autenticar(req, res, next) {
       id: decoded.id,
       email: decoded.email,
       role: decoded.role,
+      companyId: decoded.companyId ?? null,
     };
+
 
     next();
   } catch (err) {
