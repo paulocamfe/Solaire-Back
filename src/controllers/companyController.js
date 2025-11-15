@@ -14,9 +14,10 @@ async function createCompany(req, res, next) {
             data: {
                 name,
                 cnpj,
-                userId: req.user.id 
+                userId: req.user ? req.user.id : null
             }
         });
+
 
         return success(res, newCompany, 201);
 
