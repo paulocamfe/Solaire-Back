@@ -41,7 +41,7 @@ const fail = (res, error, statusCode = 400) =>
 // ==================== DELETAR USUÁRIO ====================
 const deleteUser = async (req, res) => {
   try {
-    const { id, email, name, cpf, cnpj } = req.body; // campos adicionais
+    const { id, email, name, cpf, cnpj } = req.body; 
 
     if (!id && !email && !name && !cpf && !cnpj) {
       return res
@@ -205,7 +205,6 @@ async function registerBusinessUser(req, res, next) {
 // ==================== LOGIN ====================
 async function loginUser(req, res, next) {
   try {
-    // 🔒 CORREÇÃO DE SEGURANÇA CRÍTICA:
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET || JWT_SECRET === "segredo") {
       console.error(
@@ -225,7 +224,7 @@ async function loginUser(req, res, next) {
 
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET, // <--- CORRIGIDO: Usa a constante segura
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 

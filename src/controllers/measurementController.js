@@ -4,33 +4,23 @@ const { success, fail } = require('../helpers/response');
 async function ingestMeasurement(req, res, next) {
     try {
         const serial = req.body.serial && String(req.body.serial).trim();
-        
-        // 1. Receber TODOS os dados do corpo da requisição
         const { potencia_W, temperatura, tensao, corrente, status } = req.body;
-
-        // 2. Validação principal (ainda baseada no serial e potência)
         if (!serial || typeof potencia_W !== 'number') {
             return res.status(400).json({ error: 'Serial e potencia_W (numérico) são obrigatórios.' });
         }
-
         const panel = await prisma.panel.findUnique({
             where: { serial },
             select: { id: true },
         });
-
         if (!panel) {
             return res.status(401).json({ error: 'Painel não autorizado ou não provisionado.' });
         }
-
-        // 3. Cálculo de energia (continua o mesmo)
-        const intervaloSegundos = 5.0; // Baseado no delay(5000) do Arduino
+        const intervaloSegundos = 5.0; 
         const energia_kWh = (potencia_W / 1000.0) * (intervaloSegundos / 3600.0);
-
-        // 4. Salvar TUDO no banco
         const newMeasurement = await prisma.measurement.create({
             data: {
                 panelId: panel.id,
-                energia_kWh: energia_kWh, // O valor calculado
+                energia_kWh: energia_kWh, 
                 status: status || 'OK',
                 timestamp: new Date(),
 
@@ -68,20 +58,18 @@ async function ping(req, res) {
 async function getMeasurement(req, res, next) {
     try {
         const measurementId = parseInt(req.params.id, 10);
-        const userId = req.user.id; // Vem do middleware de autenticação
+        const userId = req.user.id; 
 
         const measurement = await prisma.measurement.findUnique({
             where: { id: measurementId },
             include: {
-                panel: true // Inclui o painel para verificar a quem pertence
+                panel: true 
             },
         });
 
         if (!measurement) {
             return fail(res, 'Medição não encontrada', 404);
         }
-
-        // Verifica se o usuário logado é o dono do painel associado a esta medição
         if (measurement.panel.userId !== userId) {
             return fail(res, 'Você não tem permissão para ver esta medição.', 403);
         }
@@ -97,18 +85,12 @@ async function getSummary(req, res, next) {
     try {
         const panelId = parseInt(req.params.panelId, 10);
         const userId = req.user.id;
-        const days = parseInt(req.query.days, 10) || 7; // Pega 'days' da URL ou usa 7 como padrão
-
-        // Lógica de verificação de posse do painel (importante para segurança)
+        const days = parseInt(req.query.days, 10) || 7;
         const panel = await prisma.panel.findUnique({ where: { id: panelId } });
         if (!panel) return fail(res, 'Painel não encontrado', 404);
         if (panel.userId !== userId) return fail(res, 'Acesso não autorizado', 403);
-
-        // Calcula a data de início para a consulta
         const startDate = new Date();
         startDate.setDate(startDate.getDate() - days);
-
-        // Busca o somatório de energia no período
         const result = await prisma.measurement.aggregate({
             _sum: {
                 energia_kWh: true,
@@ -116,7 +98,7 @@ async function getSummary(req, res, next) {
             where: {
                 panelId: panelId,
                 timestamp: {
-                    gte: startDate, // gte = Greater Than or Equal (maior ou igual a)
+                    gte: startDate, 
                 },
             },
         });

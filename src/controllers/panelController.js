@@ -4,11 +4,11 @@ const { success, fail } = require('../helpers/response');
 // ==================== ADICIONAR UM PAINEL ====================
 
 async function addPanel(req, res, next) {
-    console.log('🧾 Header authorization:', req.headers.authorization);
-    console.log('👤 req.user:', req.user);
+    console.log(' Header authorization:', req.headers.authorization);
+    console.log(' req.user:', req.user);
     try {
-        console.log('📥 Dados recebidos no addPanel:', req.body);
-        console.log('👤 Usuário autenticado:', req.user);
+        console.log(' Dados recebidos no addPanel:', req.body);
+        console.log(' Usuário autenticado:', req.user);
 
         const userId = req.user.id;
         const { serial, location, model, branchId } = req.body;
@@ -37,7 +37,7 @@ async function addPanel(req, res, next) {
 
         // --- USUÁRIO RESIDENCIAL ---
         if (user.role === 'RESIDENTIAL') {
-            console.log('🏠 Usuário residencial detectado');
+            console.log('suário residencial detectado');
 
             // Verificar se placa já existe
             const existingPanel = await prisma.panel.findFirst({
@@ -73,14 +73,14 @@ async function addPanel(req, res, next) {
 
         // --- USUÁRIO EMPRESARIAL ---
         if (user.role === 'BUSINESS') {
-            console.log('🏢 Usuário empresarial detectado');
+            console.log(' Usuário empresarial detectado');
 
             if (!branchId) {
                 return fail(res, 'Para contas empresariais, é necessário informar a filial (branchId).', 400);
             }
 
             if (!user.companyId) {
-                console.log('❌ Usuário BUSINESS sem companyId');
+                console.log('Usuário BUSINESS sem companyId');
                 return fail(res, 'Usuário empresarial não vinculado a uma empresa.', 400);
             }
 
@@ -92,7 +92,7 @@ async function addPanel(req, res, next) {
             });
 
             if (!branch) {
-                console.log('❌ Filial não encontrada:', { branchId, companyId: user.companyId });
+                console.log(' Filial não encontrada:', { branchId, companyId: user.companyId });
                 return fail(res, 'Filial não encontrada ou não pertence à sua empresa.', 404);
             }
 

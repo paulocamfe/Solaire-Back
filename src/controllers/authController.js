@@ -19,7 +19,6 @@ const registerUser = async (req, res) => {
     const hashedPassword = await bcrypt.hash(password, 10);
     const verificationToken = crypto.randomBytes(32).toString('hex');
 
-    // Cria usuário no banco
     await prisma.user.create({
       data: {
         name,
@@ -27,7 +26,7 @@ const registerUser = async (req, res) => {
         password: hashedPassword,
         cpf,
         twoFactorCode: verificationToken,
-        twoFactorExpires: new Date(Date.now() + 24*60*60*1000), // Expira em 24h
+        twoFactorExpires: new Date(Date.now() + 24*60*60*1000), 
         twoFactorEnabled: false,
       },
     });
@@ -97,7 +96,7 @@ const verifyAccount = async (req, res) => {
 const loginWithToken = async (req, res) => {
   const { token } = req.body;
   try {
-    // Aqui você validaria o token (JWT ou API externa)
+
     res.json({ message: 'Login feito com sucesso!' });
   } catch (e) {
     res.status(400).json({ message: 'Token inválido.' });
