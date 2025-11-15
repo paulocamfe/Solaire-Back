@@ -227,11 +227,12 @@ async function loginUser(req, res, next) {
         id: user.id,
         email: user.email,
         role: user.role,
-        companyId: user.companyId ?? null,
+        companyId: user.companyId || null,
       },
       JWT_SECRET,
       { expiresIn: "7d" }
     );
+
 
 
     return success(
