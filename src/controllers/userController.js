@@ -41,40 +41,34 @@ const fail = (res, error, statusCode = 400) =>
 // ==================== DELETAR USUÁRIO ====================
 const deleteUser = async (req, res) => {
   try {
-    const { id, email, name, cpf, cnpj } = req.body; // campos adicionais
+    const { id, email, name, cpf } = req.body;
 
-    if (!id && !email && !name && !cpf && !cnpj) {
-      return res
-        .status(400)
-        .json({
-          message:
-            "Informe id, email, nome, cpf ou cnpj para deletar o usuário.",
-        });
+    if (!id && !email && !name && !cpf) {
+      return res.status(400).json({
+        message: "Informe id, email, nome ou cpf para deletar o usuário.",
+      });
     }
 
-    // Monta filtro dinamicamente
     const filter = {};
     if (id) filter.id = id;
     if (email) filter.email = email;
     if (name) filter.name = name;
     if (cpf) filter.cpf = cpf;
-    if (cnpj) filter.company = { cnpj: cnpj }; // caso queira deletar usuário ligado a uma empresa pelo CNPJ
 
-    // Busca o usuário
     const user = await prisma.user.findFirst({ where: filter });
     if (!user) {
       return res.status(404).json({ message: "Usuário não encontrado." });
     }
 
-    // Deleta registros relacionados
+    // Apaga resets
     await prisma.passwordReset.deleteMany({ where: { userId: user.id } });
+
+    // Painéis do usuário -> desvincula (ou apaga, se preferir)
     await prisma.panel.updateMany({
       where: { userId: user.id },
       data: { userId: null },
     });
-    // Adicione aqui outras tabelas que tenham FK para User se houver
 
-    // Deleta o usuário
     await prisma.user.delete({ where: { id: user.id } });
 
     res.json({ message: `Usuário ${user.name} deletado com sucesso!` });
@@ -104,7 +98,6 @@ async function registerResidentialUser(req, res, next) {
       data: { name, email, password: hashed, cpf, role: "RESIDENTIAL" },
     });
 
-    // Envia e-mail de boas-vindas
     await sendEmail(
       user.email,
       "Bem-vindo à Solaire ☀️",
@@ -127,61 +120,35 @@ async function registerResidentialUser(req, res, next) {
 // ==================== REGISTRO EMPRESARIAL ====================
 async function registerBusinessUser(req, res, next) {
   try {
-    const { userName, userEmail, password, companyName, companyCnpj } =
-      req.body;
+    const { name, email, password, cpf } = req.body;
 
-    if (!userName || !userEmail || !password || !companyName || !companyCnpj) {
-      return fail(
-        res,
-        "Todos os campos são obrigatórios para o cadastro empresarial"
-      );
+    if (!name || !email || !password) {
+      return fail(res, "Nome, email e senha são obrigatórios para cadastro empresarial");
     }
 
-    const existingCompany = await prisma.company.findUnique({
-      where: { cnpj: companyCnpj },
+    const existingUser = await prisma.user.findFirst({
+      where: { OR: [{ email }, { cpf }] },
     });
-    if (existingCompany) return fail(res, "CNPJ já cadastrado");
-
-    const existingUser = await prisma.user.findUnique({
-      where: { email: userEmail },
-    });
-    if (existingUser) return fail(res, "E-mail já cadastrado");
+    if (existingUser) return fail(res, "E-mail ou CPF já cadastrado.");
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const newCompany = await tx.company.create({
-        data: { name: companyName, cnpj: companyCnpj },
-      });
-
-      const newUser = await tx.user.create({
-        data: {
-          name: userName,
-          email: userEmail,
-          password: hashed,
-          role: "BUSINESS",
-          companyId: newCompany.id,
-        },
-      });
-
-      await tx.branch.create({
-        data: {
-          name: "Sede Principal",
-          address: "Endereço não informado",
-          companyId: newCompany.id,
-        },
-      });
-      return { user: newUser, company: newCompany };
+    const user = await prisma.user.create({
+      data: {
+        name,
+        email,
+        password: hashed,
+        cpf: cpf || null,
+        role: "BUSINESS",
+      },
     });
 
-    // Envia e-mail de boas-vindas empresarial
     await sendEmail(
-      result.user.email,
+      user.email,
       "Cadastro empresarial - Solaire ☀️",
-      `<h2>Olá, ${result.user.name}!</h2>
+      `<h2>Olá, ${user.name}!</h2>
 <p>Seu cadastro empresarial na <b>Solaire</b> foi concluído com sucesso.</p>
-<p>Empresa: <b>${result.company.name}</b></p>
-<p>Agora você pode gerenciar suas filiais e acompanhar a geração de energia da sua empresa.</p>
+<p>Agora você pode gerenciar suas placas solares e acompanhar a geração de energia.</p>
 <br/><p>Equipe Solaire ☀️</p>`
     );
 
@@ -189,13 +156,13 @@ async function registerBusinessUser(req, res, next) {
       res,
       {
         user: {
-          id: result.user.id,
-          name: result.user.name,
-          email: result.user.email,
+          id: user.id,
+          name: user.name,
+          email: user.email,
+          role: user.role,
         },
-        company: { id: result.company.id, name: result.company.name },
       },
-      "Empresa e usuário administrador registrados com sucesso"
+      "Usuário empresarial registrado com sucesso"
     );
   } catch (err) {
     next(err);
@@ -205,13 +172,9 @@ async function registerBusinessUser(req, res, next) {
 // ==================== LOGIN ====================
 async function loginUser(req, res, next) {
   try {
-    // 🔒 CORREÇÃO DE SEGURANÇA CRÍTICA:
     const JWT_SECRET = process.env.JWT_SECRET;
     if (!JWT_SECRET || JWT_SECRET === "segredo") {
-      console.error(
-        "ERRO FATAL: JWT_SECRET não está definido ou está inseguro."
-      );
-      throw new Error("Erro interno: Chave de segurança não configurada.");
+      throw new Error("Erro interno: JWT_SECRET não está configurado.");
     }
 
     const { email, password } = req.body;
@@ -224,8 +187,12 @@ async function loginUser(req, res, next) {
     if (!valid) return fail(res, "Senha inválida", 401);
 
     const token = jwt.sign(
-      { id: user.id, email: user.email, role: user.role },
-      JWT_SECRET, // <--- CORRIGIDO: Usa a constante segura
+      {
+        id: user.id,
+        email: user.email,
+        role: user.role,
+      },
+      JWT_SECRET,
       { expiresIn: "7d" }
     );
 
@@ -250,13 +217,7 @@ async function getMe(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: {
-        id: true,
-        name: true,
-        email: true,
-        role: true,
-        companyId: true,
-      },
+      select: { id: true, name: true, email: true, role: true },
     });
 
     if (!user) return fail(res, "Usuário não encontrado", 404);
@@ -266,17 +227,23 @@ async function getMe(req, res, next) {
   }
 }
 
-// ==================== RESUMO RESIDENCIAL ====================
-async function getResidentialSummary(req, res, next) {
+// ==================== SUMMARY ====================
+function getTarifaECo2PorRole(role) {
+  return role === "BUSINESS"
+    ? { tarifaKwh: 0.95, fatorCo2Kwh: 0.101 } // empresarial
+    : { tarifaKwh: 0.75, fatorCo2Kwh: 0.0718 }; // residencial
+}
+
+async function getSummary(req, res, next) {
   try {
     const userId = req.user.id;
     const days = parseInt(req.query.days, 10) || 30;
+
     const fromDate = new Date();
     fromDate.setDate(fromDate.getDate() - days);
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
-    if (user.role !== "RESIDENTIAL")
-      return fail(res, "Esta rota é apenas para usuários residenciais.", 403);
+    if (!user) return fail(res, "Usuário não encontrado", 404);
 
     const energyData = await prisma.measurement.aggregate({
       _sum: { energia_kWh: true },
@@ -284,190 +251,131 @@ async function getResidentialSummary(req, res, next) {
     });
 
     const totalEnergiaKWh = energyData._sum.energia_kWh || 0;
-    const tarifaKwh = user.tarifaKwh || 0.5;
-    const fatorCo2Kwh = user.fatorCo2Kwh || 0.82;
 
-    const dinheiroEconomizado = totalEnergiaKWh * tarifaKwh;
-    // 🐞 CORREÇÃO DE BUG CRÍTICO: totalEnergIAKWh -> totalEnergiaKWh
-    const co2EvitadoKg = totalEnergiaKWh * fatorCo2Kwh;
+    const { tarifaKwh, fatorCo2Kwh } = getTarifaECo2PorRole(user.role);
 
     return success(res, {
       userId,
       periodoDias: days,
       totalEnergiaKWh: parseFloat(totalEnergiaKWh.toFixed(2)),
-      dinheiroEconomizado: parseFloat(dinheiroEconomizado.toFixed(2)),
-      co2EvitadoKg: parseFloat(co2EvitadoKg.toFixed(2)),
+      dinheiroEconomizado: parseFloat((totalEnergiaKWh * tarifaKwh).toFixed(2)),
+      co2EvitadoKg: parseFloat((totalEnergiaKWh * fatorCo2Kwh).toFixed(2)),
     });
   } catch (err) {
     next(err);
   }
 }
 
-// ==================== LISTAR USUÁRIOS ====================
+async function getResidentialSummary(req, res, next) {
+  if (req.user.role !== "RESIDENTIAL")
+    return fail(res, "Apenas usuários residenciais", 403);
+  return getSummary(req, res, next);
+}
+
+async function getBusinessSummary(req, res, next) {
+  if (req.user.role !== "BUSINESS")
+    return fail(res, "Apenas usuários empresariais", 403);
+  return getSummary(req, res, next);
+}
+
+// ==================== LISTA DE USUÁRIOS ====================
 async function listUsers(req, res, next) {
   try {
-    // 👮 MELHORIA DE SEGURANÇA: Adicionado check de autorização (apenas ADMIN)
     if (req.user.role !== "ADMIN") {
-      return fail(res, "Acesso não autorizado. Apenas administradores.", 403);
+      return fail(res, "Acesso negado", 403);
     }
 
     const users = await prisma.user.findMany({
       select: { id: true, name: true, email: true, role: true },
     });
+
     return success(res, users, "Lista de usuários");
   } catch (err) {
     next(err);
   }
 }
 
-// ==================== SOLICITAR REDEFINIÇÃO DE SENHA ====================
+// ==================== SOLICITAR RESET SENHA ====================
 async function requestPasswordReset(req, res, next) {
   try {
     const { email } = req.body;
-    if (!email) return fail(res, "O campo email é obrigatório.");
+    if (!email) return fail(res, "Email obrigatório");
 
     const user = await prisma.user.findUnique({ where: { email } });
+
+    // Mesmo se não encontrar, responde OK (segurança)
     if (!user)
-      return success(
-        res,
-        null,
-        "Se houver uma conta com o email informado, um código foi enviado."
-      );
+      return success(res, null, "Se existir uma conta, um código foi enviado.");
 
     const code = Math.floor(100000 + Math.random() * 900000).toString();
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
-    const expiresAt = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
+    const tokenHash = crypto.createHash("sha256").update(code).digest("hex");
 
-    // Deleta códigos antigos e cria o novo
     await prisma.passwordReset.deleteMany({
       where: { userId: user.id, used: false },
     });
 
     await prisma.passwordReset.create({
-      data: { userId: user.id, tokenHash: codeHash, expiresAt },
+      data: {
+        userId: user.id,
+        tokenHash,
+        expiresAt: new Date(Date.now() + 15 * 60 * 1000),
+      },
     });
 
-    const emailHtml = `
-      <h2>Redefinição de senha</h2>
-      <p>Olá ${user.name},</p>
-      <p>Use o código abaixo para redefinir sua senha:</p>
-      <h1 style="letter-spacing: 4px;">${code}</h1>
-      <p>O código expira em 15 minutos.</p>
-      <br/>
-      <p>Equipe Solaire ☀️</p>
-    `;
-
     await sendEmail(
-      user.email,
-      "Código de redefinição de senha Solaire",
-      emailHtml
+      email,
+      "Código de redefinição - Solaire",
+      `<h2>Seu código:</h2><h1>${code}</h1><p>Válido por 15 minutos</p>`
     );
+
     return success(
       res,
       null,
-      "Se houver uma conta com o email informado, um código foi enviado."
+      "Se existir uma conta, um código foi enviado."
     );
   } catch (err) {
     next(err);
   }
 }
 
-// ==================== RESUMO EMPRESARIAL ====================
-async function getBusinessSummary(req, res, next) {
-  try {
-    const userId = req.user.id;
-    const days = parseInt(req.query.days, 10) || 30;
-    const fromDate = new Date();
-    fromDate.setDate(fromDate.getDate() - days);
-
-    const user = await prisma.user.findUnique({
-      where: { id: userId },
-      select: {
-        id: true,
-        role: true,
-        companyId: true,
-        tarifaKwh: true,
-        fatorCo2Kwh: true,
-      },
-    });
-
-    if (user.role !== "BUSINESS" || !user.companyId)
-      return fail(
-        res,
-        "Esta rota é apenas para usuários empresariais com empresa associada.",
-        403
-      );
-
-    // 1. Agregação em todas as filiais da empresa
-    const energyData = await prisma.measurement.aggregate({
-      _sum: { energia_kWh: true },
-      where: {
-        panel: {
-          branch: {
-            // Procura por filiais
-            companyId: user.companyId, // Que pertencem à empresa do usuário
-          },
-        },
-        timestamp: { gte: fromDate },
-      },
-    });
-
-    const totalEnergiaKWh = energyData._sum.energia_kWh || 0;
-    const tarifaKwh = user.tarifaKwh || 0.5;
-    const fatorCo2Kwh = user.fatorCo2Kwh || 0.82;
-
-    const dinheiroEconomizado = totalEnergiaKWh * tarifaKwh;
-    const co2EvitadoKg = totalEnergiaKWh * fatorCo2Kwh;
-
-    return success(res, {
-      companyId: user.companyId,
-      periodoDias: days,
-      totalEnergiaKWh: parseFloat(totalEnergiaKWh.toFixed(2)),
-      dinheiroEconomizado: parseFloat(dinheiroEconomizado.toFixed(2)),
-      co2EvitadoKg: parseFloat(co2EvitadoKg.toFixed(2)),
-    });
-  } catch (err) {
-    next(err);
-  }
-}
-
-// ==================== RESETAR SENHA ====================
+// ==================== RESET SENHA ====================
 async function resetPassword(req, res, next) {
   try {
     const { email, code, newPassword } = req.body;
+
     if (!email || !code || !newPassword)
-      return fail(res, "E-mail, código e nova senha são obrigatórios.");
+      return fail(res, "Preencha todos os campos");
 
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user) return fail(res, "Usuário não encontrado.", 404);
+    if (!user) return fail(res, "Usuário não encontrado", 404);
 
-    const codeHash = crypto.createHash("sha256").update(code).digest("hex");
+    const hash = crypto.createHash("sha256").update(code).digest("hex");
 
-    const resetRecord = await prisma.passwordReset.findFirst({
+    const record = await prisma.passwordReset.findFirst({
       where: {
         userId: user.id,
-        tokenHash: codeHash,
+        tokenHash: hash,
         used: false,
         expiresAt: { gt: new Date() },
       },
     });
 
-    if (!resetRecord) return fail(res, "Código inválido ou expirado.", 401);
+    if (!record) return fail(res, "Código inválido ou expirado", 401);
 
-    const hashedPassword = await bcrypt.hash(newPassword, 10);
+    const hashed = await bcrypt.hash(newPassword, 10);
 
     await prisma.$transaction([
       prisma.user.update({
         where: { id: user.id },
-        data: { password: hashedPassword },
+        data: { password: hashed },
       }),
       prisma.passwordReset.update({
-        where: { id: resetRecord.id },
+        where: { id: record.id },
         data: { used: true },
       }),
     ]);
 
-    return success(res, null, "Senha redefinida com sucesso.");
+    return success(res, null, "Senha redefinida com sucesso");
   } catch (err) {
     next(err);
   }
