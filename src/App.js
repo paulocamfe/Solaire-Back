@@ -49,12 +49,7 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
 
 app.use(
   cors({
-    origin: function (origin, callback) {
-      if (!origin) return callback(null, true);
-      const isAllowed = allowedOrigins.some((allowed) => origin.includes(allowed));
-      if (isAllowed) return callback(null, true);
-      console.warn(`🚫 CORS bloqueou origem: ${origin}`);
-      return callback(new Error('CORS bloqueou esta origem.'), false);
+    origin:"*",
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],

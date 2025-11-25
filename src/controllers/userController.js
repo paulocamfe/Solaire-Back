@@ -4,7 +4,6 @@ const nodemailer = require("nodemailer");
 const crypto = require("crypto");
 const prisma = require("../prismaClient");
 
-// ==================== CONFIGURAÇÃO DE EMAIL ====================
 const transporter = nodemailer.createTransport({
   service: process.env.EMAIL_SERVICE || undefined,
   host: process.env.EMAIL_HOST || undefined,
