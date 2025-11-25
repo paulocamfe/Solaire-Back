@@ -80,6 +80,7 @@ app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
 app.use('/companies', companyRoutes);
 app.use('/branches', branchRoutes);
+app.use('/esp32', esp32Routes);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -126,10 +127,15 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
+const esp32Routes = require('./esp32Routes');
+
+
+
 // ================= START SERVER =================
 const PORT = process.env.PORT || 3333;
 server = app.listen(PORT, () => {
   logger.info(`API rodando na porta ${PORT}`);
 });
+
 
 module.exports = app;
