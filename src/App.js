@@ -6,7 +6,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const logger = require('./helpers/logger');
-const prisma = require('./prismaClient');   
+const prisma = require('./prismaClient');
 
 // =================== ROTAS ===================
 const usersRouter = require('./Routes/userRoutes');
@@ -16,6 +16,12 @@ const newsletterRouter = require('./Routes/newsletterRoutes');
 const companyRoutes = require('./Routes/companyRoutes');
 const branchRoutes = require('./Routes/branchRoutes');
 const authRoutes = require('./Routes/authRoutes'); // rotas de autenticação
+let paymentRoutes;
+try {
+  paymentRoutes = require('./Routes/paymentRoutes');
+} catch (e) {
+  paymentRoutes = null;
+}
 
 // =================== SWAGGER ===================
 const swaggerJsdoc = require('swagger-jsdoc');
@@ -32,9 +38,11 @@ const app = express();
 let server;
 
 // =================== MIDDLEWARE ===================
+// segurança e logs
 app.use(helmet());
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
+// rate limiting
 app.use(
   rateLimit({
     windowMs: 15 * 60 * 1000, // 15 minutos
@@ -42,14 +50,31 @@ app.use(
   })
 );
 
-app.use(express.json());
+// Captura rawBody (necessário para webhooks como Stripe)
+app.use(
+  express.json({
+    limit: '10mb',
+    verify: (req, res, buf) => {
+      req.rawBody = buf;
+    },
+  })
+);
+app.use(express.urlencoded({ extended: true }));
 
 // =================== CORS ===================
-const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',') || [];
+const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((s) => s.trim()) || [];
 
 app.use(
   cors({
     origin:"*",
+
+    origin: function (origin, callback) {
+      if (!origin) return callback(null, true); // Postman, mobile apps, server-to-server
+      if (allowedOrigins.length === 0) return callback(null, true); // sem restrição configurada
+      const isAllowed = allowedOrigins.some((allowed) => origin.includes(allowed));
+      if (isAllowed) return callback(null, true);
+      console.warn(`🚫 CORS bloqueou origem: ${origin}`);
+      return callback(new Error('CORS bloqueou esta origem.'), false);
     },
     methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
     allowedHeaders: ['Content-Type', 'Authorization'],
@@ -63,6 +88,9 @@ app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 // =================== ROTAS ===================
 // Autenticação primeiro
 app.use('/auth', authRoutes);
+
+// Pagamentos (se existir)
+if (paymentRoutes) app.use('/payments', paymentRoutes);
 
 // Outras rotas
 app.use('/users', usersRouter);
@@ -80,6 +108,11 @@ app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' 
 
 // Error handler
 app.use((err, req, res, next) => {
+  // CORS error
+  if (err && err.message && err.message.includes('CORS bloqueou')) {
+    return res.status(403).json({ success: false, error: err.message });
+  }
+
   console.error(err);
   res.status(err.status || 500).json({
     success: false,

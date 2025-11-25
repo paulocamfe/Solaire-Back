@@ -107,3 +107,16 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
 }
+model Payment {
+  id           Int      @id @default(autoincrement())
+  userId       Int?
+  user         User?    @relation(fields: [userId], references: [id])
+  stripeId     String   @unique
+  amount       Int
+  currency     String   @default("usd")
+  status       String
+  description  String?
+  metadata     Json?
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+}
