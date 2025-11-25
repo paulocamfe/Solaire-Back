@@ -1,42 +1,45 @@
 const express = require('express');
 const router = express.Router();
-const { 
-    registerResidentialUser, 
-    registerBusinessUser, 
-    loginUser, 
-    listUsers, 
-    getMe,
-    getResidentialSummary,
-    // Importando as novas funções
-    forgotPassword,
-    resetPassword
+const {
+  registerResidentialUser,
+  registerBusinessUser,
+  loginUser,
+  listUsers,
+  getMe,
+  getResidentialSummary,
+  forgotPassword,
+  resetPassword,
+  deleteUser
 } = require('../controllers/userController');
 const autenticar = require('../middleware/auth');
 
 // =================== Rotas públicas ===================
 
-// Endpoint para registar um utilizador residencial
+// Registrar usuário residencial
 router.post('/register/residential', registerResidentialUser);
 
-// Endpoint para registar uma nova empresa (utilizador empresarial)
+// Registrar usuário empresarial
 router.post('/register/business', registerBusinessUser);
 
-// Endpoint de login
+// Login
 router.post('/login', loginUser);
 
-// --- NOVAS ROTAS PÚBLICAS PARA RECUPERAÇÃO DE SENHA ---
+// Recuperação de senha
 router.post('/forgot-password', forgotPassword);
 router.post('/reset-password', resetPassword);
 
 // =================== Rotas privadas (exigem autenticação) ===================
 
-// Busca os dados do utilizador autenticado
+// Dados do usuário autenticado
 router.get('/me', autenticar, getMe);
 
-// Busca o resumo (dashboard) do utilizador residencial autenticado
+// Resumo do usuário residencial autenticado
 router.get('/me/summary', autenticar, getResidentialSummary);
 
-// Lista todos os utilizadores (geralmente para administradores)
+// Listar todos os usuários (admin)
 router.get('/', autenticar, listUsers);
+
+// Deletar usuário
+router.delete('/:id', autenticar, deleteUser);
 
 module.exports = router;

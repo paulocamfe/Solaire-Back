@@ -1,138 +1,133 @@
-// Arquivo: controllers/panelController.js
+const prisma = require('../prismaClient');
+const { success, fail } = require('../helpers/response');
 
-const { prisma } = require('../prismaClient');
-// Supondo que você tenha helpers de resposta
-const { success, fail } = require('../helpers/response'); 
-
-// ==================== ADICIONAR UM PAINEL (INTELIGENTE) ====================
-// Esta função substitui 'provisionPanel' e 'linkPanelToUser'.
+// ==================== ADICIONAR UM PAINEL ====================
 async function addPanel(req, res, next) {
     try {
-        const userId = req.user.id; // Vem do middleware 'autenticar'
-        // Para BUSINESS, esperamos também o ID da filial
-        const { serial, location, model, branchId } = req.body;
+        const userId = req.user.id;
+        const { serial, location, model } = req.body;
 
-        if (!serial || !location || !model) {
-            return fail(res, 'Serial, location e model são obrigatórios.');
-        }
+        if (!serial) return fail(res, 'Serial da placa é obrigatório.', 400);
+        if (!location) return fail(res, 'Localização é obrigatória.', 400);
 
         const user = await prisma.user.findUnique({ where: { id: userId } });
 
-        // --- LÓGICA PARA USUÁRIO RESIDENCIAL ---
+        if (!user) return fail(res, 'Usuário não encontrado.', 404);
+
+        // Checar se o painel já existe para este usuário
+        const existingPanel = await prisma.panel.findFirst({
+            where: { serial, userId }
+        });
+
+        if (existingPanel) {
+            return fail(res, 'Já existe um painel com este serial no seu sistema.', 409);
+        }
+
+        // Limite de painéis para residencial
         if (user.role === 'RESIDENTIAL') {
-            const panelCount = await prisma.panel.count({ where: { userId: userId } });
+            const panelCount = await prisma.panel.count({ where: { userId } });
             if (panelCount >= 10) {
                 return fail(res, 'Limite de 10 painéis por usuário residencial atingido.', 403);
             }
-
-            const newPanel = await prisma.panel.create({
-                data: { serial, location, model, userId: userId } // Vincula ao User
-            });
-            return success(res, newPanel, 'Painel residencial adicionado com sucesso.');
         }
 
-        // --- LÓGICA PARA USUÁRIO EMPRESARIAL ---
-        if (user.role === 'BUSINESS') {
-            if (!branchId) {
-                return fail(res, 'Para contas empresariais, é necessário informar a filial (branchId).');
+        const newPanel = await prisma.panel.create({
+            data: {
+                serial,
+                location,
+                model: model || 'Genérico',
+                status: 'Ativa',
+                user: { connect: { id: userId } },
             }
+        });
 
-            // Verificação de segurança: a filial pertence à empresa do usuário?
-            const branch = await prisma.branch.findFirst({
-                where: { id: branchId, companyId: user.companyId }
-            });
-            if (!branch) {
-                return fail(res, 'Filial não encontrada ou não pertence à sua empresa.', 404);
-            }
-
-            const newPanel = await prisma.panel.create({
-                data: { serial, location, model, branchId: branchId } // Vincula à Branch
-            });
-            return success(res, newPanel, 'Painel empresarial adicionado com sucesso.');
-        }
-
-    } catch(err) {
-        if (err.code === 'P2002' && err.meta?.target?.includes('serial')) {
-            return fail(res, 'Já existe um painel com este número de serial.');
-        }
-        next(err);
+        return success(res, { panel: newPanel }, 'Painel adicionado com sucesso.');
+    } catch (err) {
+        console.error('❌ Erro no addPanel:', err);
+        return fail(res, 'Erro interno do servidor ao adicionar painel.', 500);
     }
 }
 
-// ==================== LISTAR PAINÉIS DO CONTEXTO DO USUÁRIO ====================
+// ==================== LISTAR PAINÉIS DO USUÁRIO ====================
 async function listMyPanels(req, res, next) {
     try {
         const userId = req.user.id;
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-        
-        let panels;
+        const panels = await prisma.panel.findMany({
+            where: { userId },
+            orderBy: { createdAt: 'desc' }
+        });
 
-        if (user.role === 'RESIDENTIAL') {
-            panels = await prisma.panel.findMany({
-                where: { userId: userId }
-            });
-        }
-
-        if (user.role === 'BUSINESS') {
-            // Lista todos os painéis de todas as filiais da empresa do usuário
-            panels = await prisma.panel.findMany({
-                where: {
-                    branch: {
-                        companyId: user.companyId
-                    }
-                },
-                include: { // Inclui o nome da filial para dar contexto
-                    branch: {
-                        select: { name: true }
-                    }
-                }
-            });
-        }
-
-        return success(res, panels, 'Lista de painéis carregada.');
-
+        return success(res, panels, 'Lista de painéis carregada com sucesso.');
     } catch (err) {
+        console.error('❌ Erro no listMyPanels:', err);
         next(err);
     }
 }
 
-// ==================== DETALHES DE UM PAINEL ESPECÍFICO ====================
+// ==================== DETALHES DE UM PAINEL ====================
 async function getPanelDetails(req, res, next) {
     try {
         const userId = req.user.id;
         const panelId = parseInt(req.params.id, 10);
-        const user = await prisma.user.findUnique({ where: { id: userId } });
 
-        const panel = await prisma.panel.findUnique({ 
-            where: { id: panelId },
-            include: { branch: true } // Inclui a filial para verificação
-        });
+        const panel = await prisma.panel.findUnique({ where: { id: panelId } });
 
         if (!panel) return fail(res, 'Painel não encontrado', 404);
+        if (panel.userId !== userId) return fail(res, 'Você não tem permissão para ver este painel.', 403);
 
-        // Verificação de segurança: o painel pertence ao usuário?
-        let isOwner = false;
-        if (user.role === 'RESIDENTIAL' && panel.userId === userId) {
-            isOwner = true;
-        }
-        if (user.role === 'BUSINESS' && panel.branch?.companyId === user.companyId) {
-            isOwner = true;
-        }
-
-        if (!isOwner) {
-            return fail(res, 'Você não tem permissão para ver este painel.', 403);
-        }
-
-        return success(res, panel);
-
+        return success(res, panel, 'Detalhes do painel carregados com sucesso.');
     } catch (err) {
+        console.error('❌ Erro no getPanelDetails:', err);
         next(err);
     }
 }
 
+// ==================== ATUALIZAR UM PAINEL ====================
+async function updatePanel(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const panelId = parseInt(req.params.id, 10);
+        const { location, status } = req.body;
+
+        const panel = await prisma.panel.findUnique({ where: { id: panelId } });
+        if (!panel) return fail(res, 'Painel não encontrado.', 404);
+        if (panel.userId !== userId) return fail(res, 'Você não tem permissão para atualizar este painel.', 403);
+
+        const updatedPanel = await prisma.panel.update({
+            where: { id: panelId },
+            data: { ...(location && { location }), ...(status && { status }) }
+        });
+
+        return success(res, { panel: updatedPanel }, 'Painel atualizado com sucesso.');
+    } catch (err) {
+        console.error('❌ Erro no updatePanel:', err);
+        next(err);
+    }
+}
+
+// ==================== DELETAR UM PAINEL ====================
+async function deletePanel(req, res, next) {
+    try {
+        const userId = req.user.id;
+        const panelId = parseInt(req.params.id, 10);
+
+        const panel = await prisma.panel.findUnique({ where: { id: panelId } });
+        if (!panel) return fail(res, 'Painel não encontrado.', 404);
+        if (panel.userId !== userId) return fail(res, 'Você não tem permissão para deletar este painel.', 403);
+
+        await prisma.panel.delete({ where: { id: panelId } });
+
+        return success(res, null, 'Painel deletado com sucesso.');
+    } catch (err) {
+        console.error('❌ Erro no deletePanel:', err);
+        next(err);
+    }
+}
 
 module.exports = {
     addPanel,
     listMyPanels,
     getPanelDetails,
+    updatePanel,
+    deletePanel
 };

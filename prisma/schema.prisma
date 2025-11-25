@@ -7,49 +7,42 @@ generator client {
   provider = "prisma-client-js"
 }
 
-// =================== MODELS ===================
-
 model User {
-  id       Int     @id @default(autoincrement())
-  name     String
-  email    String  @unique
-  password String
-  role     Role    @default(RESIDENTIAL)
-  cpf      String?
-  tarifaKwh   Float? @default(0.75)
-  fatorCo2Kwh Float? @default(0.0718)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                Int             @id @default(autoincrement())
+  name              String
+  email             String          @unique
+  password          String
+  role              Role            @default(RESIDENTIAL)
+  cpf               String?
+  tarifaKwh         Float?          @default(0.75)
+  fatorCo2Kwh       Float?          @default(0.0718)
+  createdAt         DateTime        @default(now())
+  updatedAt         DateTime        @updatedAt
   resetToken        String?
   resetTokenExpires DateTime?
-  company   Company? @relation(fields: [companyId], references: [id])
-  companyId Int?
-  panels Panel[]
+  twoFactorEnabled  Boolean         @default(false)
+  twoFactorCode     String?
+  twoFactorExpires  DateTime?
+  companyId         Int?
+  company           Company?        @relation(fields: [companyId], references: [id])
+  panels            Panel[]
+  passwordResets    PasswordReset[]
+  payments          Payment[] // <-- relação inversa com Payment
 }
 
-// ...restante do schema...
+enum Role {
+  RESIDENTIAL
+  BUSINESS
+}
 
 model Company {
-  id        Int      @id @default(autoincrement())
-  name      String
-  cnpj      String   @unique
-  // A relação inversa para 'company' em User
-  users     User[]
-  branches  Branch[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
+  id   Int    @id @default(autoincrement())
+  name String
+  cnpj String @unique
 
-model Branch {
-  id        Int     @id @default(autoincrement())
-  name      String
-  address   String
-  companyId Int
-  company   Company @relation(fields: [companyId], references: [id])
-
+  users  User[]
   panels Panel[]
 
-  // --- Métricas para BUSINESS (por filial) ---
   tarifaKwh   Float @default(0.75)
   fatorCo2Kwh Float @default(0.0718)
 
@@ -66,39 +59,66 @@ model Panel {
   lastSeen    DateTime?
   status      String?
 
-  // --- RELACIONAMENTO DUPLO ---
   userId Int?
-  // A relação inversa para 'panels' em User
   user   User? @relation(fields: [userId], references: [id])
 
-  branchId Int?
-  branch   Branch? @relation(fields: [branchId], references: [id])
+  companyId Int?
+  company   Company? @relation(fields: [companyId], references: [id])
 
   measurements Measurement[]
-  createdAt    DateTime      @default(now())
-  updatedAt    DateTime      @updatedAt
-}
 
-// =================== OUTROS MODELS ===================
-
-enum Role {
-  RESIDENTIAL
-  BUSINESS
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 }
 
 model Measurement {
-  id          Int      @id @default(autoincrement())
-  panelId     Int
-  panel       Panel    @relation(fields: [panelId], references: [id])
+  id      Int   @id @default(autoincrement())
+  panelId Int
+  panel   Panel @relation(fields: [panelId], references: [id])
+
   energia_kWh Float
   status      String
   timestamp   DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  temperatura Float?
+  tensao      Float?
+  corrente    Float?
+  potencia_W  Float?
 }
 
 model NewsletterSubscriber {
   id        Int      @id @default(autoincrement())
   email     String   @unique
   createdAt DateTime @default(now())
+}
+
+model PasswordReset {
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
+
+  tokenHash String
+  used      Boolean  @default(false)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([userId])
+  @@index([tokenHash])
+}
+
+model Payment {
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  stripeId    String   @unique
+  amount      Int
+  currency    String   @default("usd")
+  status      String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }

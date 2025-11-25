@@ -1,37 +1,34 @@
 {
-  "name": "solaire-backend",
+  "name": "solaire-back",
   "version": "1.0.0",
-  "main": "src/app.js",
+  "main": "src/App.js",
+  "type": "commonjs",
   "scripts": {
-    "start": "node src/app.js",
-    "postinstall": "prisma generate",
-    "migrate:deploy": "prisma migrate deploy",
+    "start": "node src/App.js",
+    "dev": "nodemon src/App.js",
     "prisma:generate": "prisma generate",
-    "prisma:migrate:dev": "prisma migrate dev --name init",
-    "prisma:migrate:deploy": "prisma migrate deploy"
+    "prisma:migrate": "prisma migrate dev"
   },
   "dependencies": {
-    "@prisma/client": "^6.16.2",
-    "bcryptjs": "^3.0.2",
+    "@prisma/client": "^5.0.0",
+    "bcrypt": "^5.1.0",
+    "bcryptjs": "^3.0.3",
     "cors": "^2.8.5",
-    "dotenv": "^17.2.2",
-    "express": "^5.1.0",
-    "express-rate-limit": "^8.1.0",
-    "helmet": "^8.1.0",
-    "init": "^0.1.2",
-    "joi": "^18.0.1",
+    "crypto": "^1.0.1",
+    "dotenv": "^16.0.0",
+    "express": "^4.18.2",
+    "express-rate-limit": "^6.8.0",
+    "helmet": "^7.0.0",
     "jsonwebtoken": "^9.0.2",
-    "morgan": "^1.10.1",
-    "mysql2": "^3.14.3",
-    "nodemailer": "^7.0.6",
+    "morgan": "^1.10.0",
+    "nodemailer": "^6.9.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1",
+    "swagger-ui-express": "^4.6.3",
     "winston": "^3.18.3"
   },
   "devDependencies": {
-    "jest": "^30.2.0",
-    "nodemon": "^3.1.10",
-    "prisma": "^6.16.2",
-    "supertest": "^7.1.4"
+    "nodemon": "^3.0.1",
+    "prisma": "^5.0.0"
   }
 }
+

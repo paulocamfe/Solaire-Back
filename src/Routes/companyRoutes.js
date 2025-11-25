@@ -10,7 +10,7 @@ const {
 } = require('../controllers/companyController');
 
 const autenticar = require('../middleware/auth');
-const { checkRole } = require('../middleware/roles'); 
+const { checkRole } = require('../middleware/roles');
 
 // =================== ROTAS DE COMPANY ===================
 
@@ -18,7 +18,7 @@ const { checkRole } = require('../middleware/roles');
 router.get('/', autenticar, checkRole(['ADMIN']), getAllCompanies);
 
 // POST /companies -> Cria uma nova empresa (Apenas para ADMINS)
-router.post('/', autenticar, checkRole(['ADMIN']), createCompany);
+router.post('/', autenticar, createCompany);
 
 // GET /companies/:id -> Busca uma empresa específica pelo ID
 // Um usuário BUSINESS só pode ver sua própria empresa, um ADMIN pode ver qualquer uma.
