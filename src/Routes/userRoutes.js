@@ -1,47 +1,45 @@
-    const express = require('express');
-    const router = express.Router();
-    const { 
-        registerResidentialUser, 
-        registerBusinessUser, 
-        loginUser, 
-        listUsers, 
-        getMe,
-        getResidentialSummary,
-        requestPasswordReset,
-        resetPassword
-    } = require('../controllers/userController');
-    const autenticar = require('../middleware/auth');
-    const { deleteUser } = require('../controllers/userController.js');
+const express = require('express');
+const router = express.Router();
+const {
+  registerResidentialUser,
+  registerBusinessUser,
+  loginUser,
+  listUsers,
+  getMe,
+  getResidentialSummary,
+  forgotPassword,
+  resetPassword,
+  deleteUser
+} = require('../controllers/userController');
+const autenticar = require('../middleware/auth');
 
-    // =================== Rotas públicas ===================
+// =================== Rotas públicas ===================
 
-    // Endpoint para registrar um usuário residencial
-    router.post('/register/residential', registerResidentialUser);
+// Registrar usuário residencial
+router.post('/register/residential', registerResidentialUser);
 
-    // Endpoint para registrar uma nova empresa (usuário empresarial)
-    router.post('/register/business', registerBusinessUser);
+// Registrar usuário empresarial
+router.post('/register/business', registerBusinessUser);
 
-    // Endpoint de login
-    router.post('/login', loginUser);
+// Login
+router.post('/login', loginUser);
 
-    // Endpoint para solicitar redefinição de senha (envia email com token)
-    router.post('/forgot-password', requestPasswordReset);
-                
-    // Endpoint para resetar a senha (recebe email + token + nova senha)
-    router.post('/reset-password', resetPassword);
+// Recuperação de senha
+router.post('/forgot-password', forgotPassword);
+router.post('/reset-password', resetPassword);
 
-    // =================== Rotas privadas (exigem autenticação) ===================
+// =================== Rotas privadas (exigem autenticação) ===================
 
-    // Busca os dados do usuário logado
-    router.get('/me', autenticar, getMe);
+// Dados do usuário autenticado
+router.get('/me', autenticar, getMe);
 
-    // Busca o resumo (dashboard) do usuário residencial logado
-    router.get('/me/summary', autenticar, getResidentialSummary);
+// Resumo do usuário residencial autenticado
+router.get('/me/summary', autenticar, getResidentialSummary);
 
-    // Lista todos os usuários (geralmente para administradores)
-    router.get('/', autenticar, listUsers);
+// Listar todos os usuários (admin)
+router.get('/', autenticar, listUsers);
 
-    // Deleta um usuário 
-    router.delete('/:id', deleteUser);
+// Deletar usuário
+router.delete('/:id', autenticar, deleteUser);
 
-    module.exports = router;
+module.exports = router;

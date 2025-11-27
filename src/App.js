@@ -7,6 +7,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const logger = require('./helpers/logger');
 const prisma = require('./prismaClient');
+const WebSocket = require('ws');
 
 // =================== ROTAS ===================
 const usersRouter = require('./Routes/userRoutes');
@@ -36,6 +37,21 @@ const swaggerSpec = swaggerJsdoc({
 
 const app = express();
 let server;
+let wss; // WebSocket server
+
+// ------------------------------
+// ARMAZENA O ÚLTIMO DADO RECEBIDO (placa solar)
+// ------------------------------
+let lastSolarData = null;
+
+function broadcast(data) {
+  if (!wss) return;
+  for (const client of wss.clients) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(JSON.stringify(data));
+    }
+  }
+}
 
 // =================== MIDDLEWARE ===================
 // segurança e logs
@@ -99,6 +115,30 @@ app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
 app.use('/companies', companyRoutes);
 app.use('/branches', branchRoutes);
+app.use('/esp32', esp32Routes);
+
+// ------------------------------
+// ESP32 / ARDUINO → ENVIA DADOS PRAQUI
+// ------------------------------
+app.post('/solar', (req, res) => {
+  const data = req.body;
+  console.log('🔆 Dados recebidos da placa solar:', data);
+
+  // Salvar último dado
+  lastSolarData = data;
+
+  // Enviar para todos celulares/conexões WebSocket
+  broadcast({ type: 'update', payload: data });
+
+  res.json({ message: 'OK, recebido!' });
+});
+
+// ------------------------------
+// MOBILE → BUSCA O ÚLTIMO DADO
+// ------------------------------
+app.get('/solar', (req, res) => {
+  res.json(lastSolarData || { message: 'Ainda sem dados...' });
+});
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -128,6 +168,9 @@ async function shutdown(signal) {
     if (server) {
       server.close(() => logger.info('Servidor encerrado.'));
     }
+    if (wss) {
+      wss.close(() => logger.info('WebSocket encerrado.'));
+    }
     await prisma.$disconnect();
     logger.info('Conexão Prisma encerrada com sucesso.');
     process.exit(0);
@@ -148,10 +191,35 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
+const esp32Routes = require('./esp32Routes');
+
+
 // =================== START SERVER ===================
-const PORT = process.env.PORT || 3333;
+const PORT = process.env.PORT || 3000;
 server = app.listen(PORT, () => {
   logger.info(`API rodando na porta ${PORT}`);
+
+  // Inicializa WebSocket server ligado ao mesmo servidor HTTP
+  wss = new WebSocket.Server({ server });
+
+  wss.on('connection', (ws) => {
+    console.log('📱 Mobile conectado ao WebSocket!');
+
+    // Quando conectar, já envia o último dado
+    if (lastSolarData) {
+      ws.send(JSON.stringify({ type: 'update', payload: lastSolarData }));
+    }
+
+    ws.on('message', (msg) => {
+      // opcional: tratar mensagens vindas do cliente
+      console.log('Mensagem WS recebida:', msg.toString());
+    });
+
+    ws.on('close', () => {
+      console.log('Cliente WebSocket desconectado.');
+    });
+  });
 });
+
 
 module.exports = app;
