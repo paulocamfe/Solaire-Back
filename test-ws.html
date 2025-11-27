@@ -1,0 +1,161 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monitoramento Solaire - Tempo Real</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background: linear-gradient(135deg, #FFD700, #FFA500);
+      margin: 0;
+      padding: 20px;
+      min-height: 100vh;
+    }
+    .container {
+      max-width: 600px;
+      margin: 0 auto;
+      background: white;
+      padding: 30px;
+      border-radius: 10px;
+      box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+    }
+    h1 {
+      color: #333;
+      text-align: center;
+    }
+    .status {
+      padding: 10px;
+      border-radius: 5px;
+      margin-bottom: 20px;
+      font-weight: bold;
+      text-align: center;
+    }
+    .connected {
+      background: #4CAF50;
+      color: white;
+    }
+    .disconnected {
+      background: #f44336;
+      color: white;
+    }
+    .data-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 15px;
+      margin-top: 20px;
+    }
+    .data-box {
+      background: #f5f5f5;
+      padding: 15px;
+      border-radius: 5px;
+      border-left: 4px solid #FFD700;
+    }
+    .data-label {
+      font-size: 12px;
+      color: #666;
+      text-transform: uppercase;
+    }
+    .data-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #333;
+      margin-top: 5px;
+    }
+    .log {
+      background: #222;
+      color: #0f0;
+      padding: 15px;
+      border-radius: 5px;
+      max-height: 300px;
+      overflow-y: auto;
+      font-family: monospace;
+      font-size: 12px;
+      margin-top: 20px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>☀️ Monitoramento Solaire</h1>
+    
+    <div id="status" class="status disconnected">
+      ⚫ Desconectado
+    </div>
+
+    <div class="data-grid">
+      <div class="data-box">
+        <div class="data-label">Tensão (V)</div>
+        <div class="data-value" id="voltage">--</div>
+      </div>
+      <div class="data-box">
+        <div class="data-label">Corrente (A)</div>
+        <div class="data-value" id="current">--</div>
+      </div>
+      <div class="data-box">
+        <div class="data-label">Potência (W)</div>
+        <div class="data-value" id="power">--</div>
+      </div>
+      <div class="data-box">
+        <div class="data-label">Temperatura (°C)</div>
+        <div class="data-value" id="temperature">--</div>
+      </div>
+    </div>
+
+    <div class="log" id="log"></div>
+  </div>
+
+  <script>
+    const status = document.getElementById('status');
+    const log = document.getElementById('log');
+    const voltage = document.getElementById('voltage');
+    const current = document.getElementById('current');
+    const power = document.getElementById('power');
+    const temperature = document.getElementById('temperature');
+
+    // Conecte ao WebSocket
+    const ws = new WebSocket('ws://192.168.137.1:3333');
+
+    ws.onopen = () => {
+      status.textContent = '🟢 Conectado';
+      status.className = 'status connected';
+      addLog('✅ Conectado ao servidor');
+    };
+
+    ws.onmessage = (event) => {
+      try {
+        const message = JSON.parse(event.data);
+        if (message.type === 'update') {
+          const data = message.payload;
+          
+          voltage.textContent = (data.tensao || 0).toFixed(2);
+          current.textContent = (data.corrente || 0).toFixed(3);
+          power.textContent = (data.potencia || 0).toFixed(2);
+          temperature.textContent = (data.temperatura || 0).toFixed(2);
+          
+          addLog(`📊 Panel ${data.panelId}: ${data.tensao}V, ${data.corrente}A, ${data.potencia}W, ${data.temperatura}°C`);
+        }
+      } catch (err) {
+        addLog(`❌ Erro ao processar: ${err.message}`);
+      }
+    };
+
+    ws.onerror = (error) => {
+      addLog(`⚠️ Erro: ${error}`);
+    };
+
+    ws.onclose = () => {
+      status.textContent = '🔴 Desconectado';
+      status.className = 'status disconnected';
+      addLog('❌ Desconectado do servidor - reconectando em 5s...');
+      setTimeout(() => location.reload(), 5000);
+    };
+
+    function addLog(msg) {
+      const time = new Date().toLocaleTimeString('pt-BR');
+      log.textContent += `[${time}] ${msg}\n`;
+      log.scrollTop = log.scrollHeight;
+    }
+  </script>
+</body>
+</html>

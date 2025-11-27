@@ -1,8 +1,8 @@
 const bcrypt = require('bcryptjs');
-const { PrismaClient } = require('@prisma/client');
+const prisma = require('../prismaClient');
 const jwt = require('jsonwebtoken');
-
-const prisma = new PrismaClient();
+const crypto = require('crypto');
+const { sendMail } = require('../helpers/mailer');
 
 const success = (res, data, message = 'Success') => {
   return res.json({ success: true, data, message });
@@ -12,11 +12,10 @@ const fail = (res, error, statusCode = 400) => {
   return res.status(statusCode).json({ success: false, error });
 };
 
-// ==================== SUAS FUNÇÕES EXISTENTES ====================
-// ... (registerResidentialUser, registerBusinessUser, loginUser, getMe, etc. permanecem aqui) ...
+// ==================== REGISTRO DE USUÁRIO RESIDENCIAL ====================
 async function registerResidentialUser(req, res, next) {
-  try {
-    const { name, email, password, cpf } = req.body;
+  try {
+    const { name, email, password, cpf } = req.body;
 
     if (!name || !email || !password || !cpf) {
       return fail(res, 'Nome, email, senha e CPF são obrigatórios.');
@@ -29,7 +28,7 @@ async function registerResidentialUser(req, res, next) {
       return fail(res, 'E-mail ou CPF já cadastrado.');
     }
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
 
     const user = await prisma.user.create({
       data: {
@@ -37,7 +36,7 @@ async function registerResidentialUser(req, res, next) {
         email,
         password: hashed,
         cpf,
-        role: 'RESIDENTIAL', 
+        role: 'RESIDENTIAL',
       },
     });
 
@@ -52,6 +51,7 @@ async function registerResidentialUser(req, res, next) {
   }
 }
 
+// ==================== REGISTRO DE USUÁRIO EMPRESARIAL ====================
 async function registerBusinessUser(req, res, next) {
   try {
     const { userName, userEmail, password, companyName, companyCnpj } = req.body;
@@ -66,7 +66,7 @@ async function registerBusinessUser(req, res, next) {
     const existingUser = await prisma.user.findUnique({ where: { email: userEmail } });
     if (existingUser) return fail(res, 'E-mail já cadastrado');
 
-    const hashed = await bcrypt.hash(password, 10);
+    const hashed = await bcrypt.hash(password, 10);
 
     const result = await prisma.$transaction(async (tx) => {
       const newCompany = await tx.company.create({
@@ -87,8 +87,8 @@ async function registerBusinessUser(req, res, next) {
         data: {
           name: 'Sede Principal',
           address: 'Endereço não informado',
-          companyId: newCompany.id
-        }
+          companyId: newCompany.id,
+        },
       });
 
       return { user: newUser, company: newCompany };
@@ -96,13 +96,14 @@ async function registerBusinessUser(req, res, next) {
 
     return success(res, {
       user: { id: result.user.id, name: result.user.name, email: result.user.email },
-      company: { id: result.company.id, name: result.company.name }
+      company: { id: result.company.id, name: result.company.name },
     }, 'Empresa e usuário administrador registrados com sucesso');
   } catch (err) {
     next(err);
   }
 }
 
+// ==================== LOGIN ====================
 async function loginUser(req, res, next) {
   try {
     const { email, password } = req.body;
@@ -120,14 +121,19 @@ async function loginUser(req, res, next) {
       { expiresIn: '7d' }
     );
 
-    return success(res, { id: user.id, name: user.name, email: user.email, role: user.role, token }, 'Login realizado com sucesso');
+    return success(res, { 
+      id: user.id, 
+      name: user.name, 
+      email: user.email, 
+      role: user.role, 
+      token 
+    }, 'Login realizado com sucesso');
   } catch (err) {
     next(err);
   }
 }
 
-
-// ==================== BUSCAR DADOS DO USUÁRIO LOGADO====================
+// ==================== BUSCAR DADOS DO USUÁRIO LOGADO ====================
 async function getMe(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
@@ -153,15 +159,15 @@ async function getResidentialSummary(req, res, next) {
 
     const user = await prisma.user.findUnique({ where: { id: userId } });
     if (user.role !== 'RESIDENTIAL') {
-        return fail(res, 'Esta rota é apenas para usuários residenciais.', 403);
+      return fail(res, 'Esta rota é apenas para usuários residenciais.', 403);
     }
 
     const energyData = await prisma.measurement.aggregate({
-        _sum: { energia_kWh: true },
-        where: {
-            panel: { userId: userId },
-            timestamp: { gte: fromDate },
-        },
+      _sum: { energia_kWh: true },
+      where: {
+        panel: { userId: userId },
+        timestamp: { gte: fromDate },
+      },
     });
 
     const totalEnergiaKWh = energyData._sum.energia_kWh || 0;
@@ -169,17 +175,16 @@ async function getResidentialSummary(req, res, next) {
     const co2EvitadoKg = totalEnergiaKWh * user.fatorCo2Kwh;
 
     return success(res, {
-        userId,
-        periodoDias: days,
-        totalEnergiaKWh: parseFloat(totalEnergiaKWh.toFixed(2)),
-        dinheiroEconomizado: parseFloat(dinheiroEconomizado.toFixed(2)),
-        co2EvitadoKg: parseFloat(co2EvitadoKg.toFixed(2)),
+      userId,
+      periodoDias: days,
+      totalEnergiaKWh: parseFloat(totalEnergiaKWh.toFixed(2)),
+      dinheiroEconomizado: parseFloat(dinheiroEconomizado.toFixed(2)),
+      co2EvitadoKg: parseFloat(co2EvitadoKg.toFixed(2)),
     });
   } catch (err) {
-      next(err);
+    next(err);
   }
 }
-
 
 // ==================== LISTAR USUÁRIOS ====================
 async function listUsers(req, res, next) {
@@ -193,13 +198,17 @@ async function listUsers(req, res, next) {
   }
 }
 
-
-// ==================== NOVAS FUNÇÕES ====================
-
+// ==================== SOLICITAR RECUPERAÇÃO DE SENHA ====================
 async function forgotPassword(req, res, next) {
   try {
+    const { email } = req.body;
+
+    if (!email) {
+      return fail(res, 'Email é obrigatório.');
+    }
+
     const user = await prisma.user.findUnique({
-      where: { email: req.body.email },
+      where: { email },
     });
 
     if (!user) {
@@ -209,73 +218,79 @@ async function forgotPassword(req, res, next) {
 
     const resetToken = crypto.randomBytes(32).toString('hex');
     const hashedToken = crypto.createHash('sha256').update(resetToken).digest('hex');
-    const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos de validade
+    const resetTokenExpires = new Date(Date.now() + 15 * 60 * 1000); // 15 minutos
 
     await prisma.user.update({
       where: { email: user.email },
       data: {
-        resetToken: hashedToken, // Usando o nome correto do seu schema
+        resetToken: hashedToken,
         resetTokenExpires,
       },
     });
 
-    // Construa a URL para o seu frontend, passando o token (NÃO o hashed token)
-    const resetURL = `${process.env.FRONTEND_URL}/reset-password?token=${resetToken}`;
-    
-    // Crie o conteúdo do e-mail
+    // Construa a URL para o seu frontend
+    const resetURL = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/reset-password?token=${resetToken}`;
+
     const emailHtml = `
       <div style="font-family: Arial, sans-serif; color: #333;">
         <h2>Recuperação de Senha</h2>
         <p>Recebemos um pedido para redefinir a sua senha. Clique no link abaixo para continuar.</p>
         <p>Este link é válido por 15 minutos.</p>
-        <a href="${resetURL}" style="background-color: #f5b025; color: black; padding: 10px 20px; text-decoration: none; border-radius: 5px;">Redefinir Senha</a>
+        <a href="${resetURL}" style="background-color: #f5b025; color: black; padding: 10px 20px; text-decoration: none; border-radius: 5px; display: inline-block;">Redefinir Senha</a>
         <p>Se não foi você que solicitou, por favor, ignore este e-mail.</p>
       </div>
     `;
 
-    await sendMail({
-      to: user.email,
-      subject: 'Redefinição da sua Senha Solaire',
-      html: emailHtml,
-    });
-    
-    return success(res, null, 'Se um utilizador com esse e-mail existir, um link de redefinição foi enviado.');
+    try {
+      await sendMail({
+        to: user.email,
+        subject: 'Redefinição da sua Senha Solaire ☀️',
+        html: emailHtml,
+      });
+    } catch (mailErr) {
+      console.error('Erro ao enviar email:', mailErr);
+      // Continua mesmo se o email falhar (em dev é normal)
+    }
 
+    return success(res, null, 'Se um utilizador com esse e-mail existir, um link de redefinição foi enviado.');
   } catch (err) {
     next(err);
   }
 }
 
-
+// ==================== REDEFINIR SENHA ====================
 async function resetPassword(req, res, next) {
   try {
     const { token, password } = req.body;
 
-    // 1. Recrie o hash do token recebido para procurar na base de dados
+    if (!token || !password) {
+      return fail(res, 'Token e nova senha são obrigatórios.');
+    }
+
+    // Recrie o hash do token recebido
     const hashedToken = crypto.createHash('sha256').update(token).digest('hex');
 
-    // 2. Procure o utilizador pelo token e verifique se não expirou
+    // Procure o utilizador pelo token e verifique se não expirou
     const user = await prisma.user.findFirst({
       where: {
         resetToken: hashedToken,
-        resetTokenExpires: { gte: new Date() }, // gte = "maior ou igual a", ou seja, a data ainda é válida
+        resetTokenExpires: { gte: new Date() },
       },
     });
 
-    // 3. Se não encontrar, o token é inválido ou expirou
     if (!user) {
       return fail(res, 'Token inválido ou expirado.', 400);
     }
-    
-    // 4. Valide a nova senha
-    if (!password || password.length < 6) {
+
+    // Valide a nova senha
+    if (password.length < 6) {
       return fail(res, 'A senha deve ter pelo menos 6 caracteres.', 400);
     }
 
-    // 5. Crie o hash da nova senha
+    // Crie o hash da nova senha
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // 6. Atualize a senha e limpe os campos de redefinição
+    // Atualize a senha e limpe os campos de redefinição
     await prisma.user.update({
       where: { id: user.id },
       data: {
@@ -286,12 +301,37 @@ async function resetPassword(req, res, next) {
     });
 
     return success(res, null, 'Senha redefinida com sucesso!');
-
   } catch (err) {
     next(err);
   }
 }
 
+// ==================== DELETAR USUÁRIO ====================
+async function deleteUser(req, res, next) {
+  try {
+    const { id } = req.params;
+
+    if (!id) {
+      return fail(res, 'ID do usuário é obrigatório.');
+    }
+
+    const user = await prisma.user.findUnique({
+      where: { id: parseInt(id) },
+    });
+
+    if (!user) {
+      return fail(res, 'Usuário não encontrado.', 404);
+    }
+
+    await prisma.user.delete({
+      where: { id: parseInt(id) },
+    });
+
+    return success(res, null, 'Usuário deletado com sucesso.');
+  } catch (err) {
+    next(err);
+  }
+}
 
 // ==================== EXPORTAÇÃO ====================
 module.exports = {
@@ -300,6 +340,8 @@ module.exports = {
   loginUser,
   getMe,
   getResidentialSummary,
-  getBusinessSummary,
   listUsers,
+  forgotPassword,
+  resetPassword,
+  deleteUser,
 };
