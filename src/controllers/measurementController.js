@@ -127,38 +127,27 @@ async function listMeasurementsByPanel(req, res, next) {
         const limit = parseInt(req.query.limit, 10) || 20;
         const skip = (page - 1) * limit;
 
-        const user = await prisma.user.findUnique({ where: { id: userId } });
-
-        // 1. Busca o painel para verificar a quem ele pertence
+        // Busca o painel para verificar a quem ele pertence
         const panel = await prisma.panel.findUnique({
             where: { id: panelId },
-            include: { branch: true }
         });
 
         if (!panel) return fail(res, 'Painel não encontrado', 404);
 
-        // 2. Verifica se o usuário logado é o dono do painel
-        let isOwner = false;
-        if (user.role === 'RESIDENTIAL' && panel.userId === userId) {
-            isOwner = true;
-        }
-        if (user.role === 'BUSINESS' && panel.branch?.companyId === user.companyId) {
-            isOwner = true;
-        }
-
-        if (!isOwner) {
+        // Verifica se o usuário logado é o dono do painel
+        if (panel.userId !== userId) {
             return fail(res, 'Você não tem permissão para ver as medições deste painel.', 403);
         }
 
-        // 3. Se for o dono, busca as medições com paginação
+        // Busca as medições com paginação
         const measurements = await prisma.measurement.findMany({
-            where: { panelId: panelId },
+            where: { panelId },
             orderBy: { timestamp: 'desc' },
             take: limit,
-            skip: skip,
+            skip,
         });
 
-        const totalMeasurements = await prisma.measurement.count({ where: { panelId: panelId } });
+        const totalMeasurements = await prisma.measurement.count({ where: { panelId } });
 
         return success(res, {
             pagination: {
@@ -173,6 +162,7 @@ async function listMeasurementsByPanel(req, res, next) {
         next(err);
     }
 }
+
 
 
 module.exports = {

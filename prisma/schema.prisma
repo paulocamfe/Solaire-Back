@@ -8,45 +8,28 @@ generator client {
 }
 
 model User {
-  id              Int       @id @default(autoincrement())
-  name            String
-  email           String    @unique
-  password        String
-  role            Role      @default(RESIDENTIAL)
-  cpf             String?
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String  @unique
+  password String
+  role     Role    @default(RESIDENTIAL)
+  cpf      String?
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  payments Payment[]
 
-  twoFactorEnabled Boolean   @default(false)
-  twoFactorCode     String?  
-  twoFactorExpires  DateTime?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
-  companyId       Int?
-  company         Company?  @relation(fields: [companyId], references: [id])
-
-  panels          Panel[]
-  passwordResets  PasswordReset[]
+  twoFactorEnabled Boolean         @default(false)
+  twoFactorCode    String?
+  twoFactorExpires DateTime?
+  panels           Panel[]
+  passwordResets   PasswordReset[]
 }
 
 enum Role {
   RESIDENTIAL
   BUSINESS
-}
-
-model Company {
-  id        Int      @id @default(autoincrement())
-  name      String
-  cnpj      String   @unique
-
-  users     User[]
-  panels    Panel[]  
-
-  tarifaKwh   Float   @default(0.75)
-  fatorCo2Kwh Float   @default(0.0718)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
 }
 
 model Panel {
@@ -58,11 +41,8 @@ model Panel {
   lastSeen    DateTime?
   status      String?
 
-  userId   Int?
-  user     User?    @relation(fields: [userId], references: [id])
-
-  companyId Int?   
-  company   Company? @relation(fields: [companyId], references: [id])
+  userId Int?
+  user   User? @relation(fields: [userId], references: [id])
 
   measurements Measurement[]
 
@@ -71,16 +51,16 @@ model Panel {
 }
 
 model Measurement {
-  id          Int      @id @default(autoincrement())
-  panelId     Int
-  panel       Panel    @relation(fields: [panelId], references: [id])
+  id      Int   @id @default(autoincrement())
+  panelId Int
+  panel   Panel @relation(fields: [panelId], references: [id])
 
   energia_kWh Float
   status      String
   timestamp   DateTime @default(now())
 
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   temperatura Float?
   tensao      Float?
@@ -95,9 +75,9 @@ model NewsletterSubscriber {
 }
 
 model PasswordReset {
-  id        Int      @id @default(autoincrement())
-  userId    Int
-  user      User     @relation(fields: [userId], references: [id])
+  id     Int  @id @default(autoincrement())
+  userId Int
+  user   User @relation(fields: [userId], references: [id])
 
   tokenHash String
   used      Boolean  @default(false)
@@ -107,16 +87,17 @@ model PasswordReset {
   @@index([userId])
   @@index([tokenHash])
 }
+
 model Payment {
-  id           Int      @id @default(autoincrement())
-  userId       Int?
-  user         User?    @relation(fields: [userId], references: [id])
-  stripeId     String   @unique
-  amount       Int
-  currency     String   @default("usd")
-  status       String
-  description  String?
-  metadata     Json?
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id          Int      @id @default(autoincrement())
+  userId      Int?
+  user        User?    @relation(fields: [userId], references: [id])
+  stripeId    String   @unique
+  amount      Int
+  currency    String   @default("usd")
+  status      String
+  description String?
+  metadata    Json?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
 }
