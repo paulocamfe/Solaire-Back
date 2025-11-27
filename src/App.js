@@ -82,6 +82,8 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((s) => s.trim
 
 app.use(
   cors({
+    origin:"*",
+
     origin: function (origin, callback) {
       if (!origin) return callback(null, true); // Postman, mobile apps, server-to-server
       if (allowedOrigins.length === 0) return callback(null, true); // sem restrição configurada
@@ -113,6 +115,7 @@ app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
 app.use('/companies', companyRoutes);
 app.use('/branches', branchRoutes);
+app.use('/esp32', esp32Routes);
 
 // ------------------------------
 // ESP32 / ARDUINO → ENVIA DADOS PRAQUI
@@ -188,6 +191,9 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
+const esp32Routes = require('./esp32Routes');
+
+
 // =================== START SERVER ===================
 const PORT = process.env.PORT || 3000;
 server = app.listen(PORT, () => {
@@ -214,5 +220,6 @@ server = app.listen(PORT, () => {
     });
   });
 });
+
 
 module.exports = app;
