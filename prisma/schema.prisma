@@ -8,6 +8,23 @@ generator client {
 }
 
 model User {
+  id       Int     @id @default(autoincrement())
+  name     String
+  email    String  @unique
+  password String
+  role     Role    @default(RESIDENTIAL)
+  cpf      String?
+
+  payments Payment[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  twoFactorEnabled Boolean         @default(false)
+  twoFactorCode    String?
+  twoFactorExpires DateTime?
+  panels           Panel[]
+  passwordResets   PasswordReset[]
   id                Int             @id @default(autoincrement())
   name              String
   email             String          @unique
@@ -35,21 +52,6 @@ enum Role {
   BUSINESS
 }
 
-model Company {
-  id   Int    @id @default(autoincrement())
-  name String
-  cnpj String @unique
-
-  users  User[]
-  panels Panel[]
-
-  tarifaKwh   Float @default(0.75)
-  fatorCo2Kwh Float @default(0.0718)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-}
-
 model Panel {
   id          Int       @id @default(autoincrement())
   serial      String    @unique
@@ -61,10 +63,6 @@ model Panel {
 
   userId Int?
   user   User? @relation(fields: [userId], references: [id])
-
-  companyId Int?
-  company   Company? @relation(fields: [companyId], references: [id])
-
   measurements Measurement[]
 
   createdAt DateTime @default(now())
