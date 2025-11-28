@@ -1,95 +1,83 @@
-// Bibliotecas
 #include <WiFi.h>
 #include <HTTPClient.h>
-#include <Servo.h>
+#include <ArduinoJson.h>
 
-// ---- Pinos ----
-#define VOLTAGE_PIN 35
-#define CURRENT_PIN 36
-#define LDR_PIN     34
-#define SERVO_PIN   13
-
-// ---- Calibração ----
-const float VOLTAGE_DIVIDER_RATIO = 11.0;
-const float SENSOR_SENSITIVITY = 0.100;
-const float SENSOR_OFFSET = 2.5;
-
-// ---- WiFi ----
-const char* ssid = "SALA";
+const char* ssid = "SALA";      
 const char* password = "123456789";
-
-// ---- URL DO BACKEND SOLAIRE ----
-String serverName = "http://10.92.199.16:3000/esp32/send";
-
-// ID fixo da empresa (TESTE)
-// Depois você substitui por uma variável vinda do banco
-int companyId = 1;
-
-// ---- Servo ----
-Servo solarServo;
+const char* serverUrl = "http://192.168.137.1:3333/esp32/data"; 
 
 void setup() {
-  Serial.begin(9600);
+  Serial.begin(115200);
+  delay(1000);
+  Serial.println("\n\n=== Iniciando ESP32 ===");
   
-  solarServo.attach(SERVO_PIN);
-  solarServo.write(90);
-
+  WiFi.mode(WIFI_STA);
   WiFi.begin(ssid, password);
-  Serial.print("Conectando no WiFi...");
-
-  while (WiFi.status() != WL_CONNECTED) {
+  
+  Serial.print("Conectando WiFi: ");
+  int tentativas = 0;
+  while (WiFi.status() != WL_CONNECTED && tentativas < 20) {
     delay(500);
     Serial.print(".");
+    tentativas++;
   }
-
-  Serial.println("\nWifi conectado!");
+  
+  if (WiFi.status() == WL_CONNECTED) {
+    Serial.println("\n✅ WiFi conectado!");
+    Serial.print("IP: ");
+    Serial.println(WiFi.localIP());
+  } else {
+    Serial.println("\n❌ Falha ao conectar WiFi!");
+  }
 }
 
 void loop() {
   if (WiFi.status() == WL_CONNECTED) {
-    
-    // ---- Leitura dos sensores ----
-    int rawVoltage = analogRead(VOLTAGE_PIN);
-    float voltage = (rawVoltage * (3.3 / 4095.0)) * VOLTAGE_DIVIDER_RATIO;
+    // Leia os sensores (exemplo com seus valores reais)
+    int panelId = 1;
+    float temperatura = 25.5;   // DHT22, etc
+    float corrente = 8.065;      // Sensor de corrente
+    float tensao = 0.32;         // Sensor de tensão
+    float potencia = tensao * corrente;
 
-    int rawCurrent = analogRead(CURRENT_PIN);
-    float current = ((rawCurrent * (3.3 / 4095.0)) - SENSOR_OFFSET) / SENSOR_SENSITIVITY;
-    if (current < 0) current = 0;
+    // Crie JSON com ArduinoJson
+    StaticJsonDocument<256> doc;
+    doc["panelId"] = panelId;
+    doc["temperatura"] = temperatura;
+    doc["corrente"] = corrente;
+    doc["tensao"] = tensao;
+    doc["potencia"] = potencia;
 
-    float power = voltage * current;
+    String json;
+    serializeJson(doc, json);
 
-    int lightValue = analogRead(LDR_PIN);
-
-    int servoAngle = map(lightValue, 0, 4095, 0, 180);
-    solarServo.write(servoAngle);
-
-    float temperature = 25.0; // se quiser acrescentar sensor depois
-
-    // ---- Envio para backend ----
-    HTTPClient http;
-    http.begin(serverName);
-    http.addHeader("Content-Type", "application/json");
-
-    String json = "{";
-    json += "\"companyId\":" + String(companyId) + ",";
-    json += "\"voltage\":" + String(voltage) + ",";
-    json += "\"current\":" + String(current) + ",";
-    json += "\"power\":" + String(power) + ",";
-    json += "\"light\":" + String(lightValue) + ",";
-    json += "\"temperature\":" + String(temperature) + ",";
-    json += "\"servoAngle\":" + String(servoAngle);
-    json += "}";
-
-    int code = http.POST(json);
-
-    Serial.println("\n---- Enviado ----");
+    Serial.println("\n📤 Enviando dados:");
     Serial.println(json);
+
+    // Envie para o servidor
+    HTTPClient http;
+    http.begin(serverUrl);
+    http.addHeader("Content-Type", "application/json");
     
-    if (code > 0) Serial.println("Sucesso! Código: " + String(code));
-    else Serial.println("Falha! Código: " + String(code));
-
+    int httpCode = http.POST(json);
+    
+    Serial.print("Resposta do servidor: ");
+    Serial.println(httpCode);
+    
+    if (httpCode == 200) {
+      String response = http.getString();
+      Serial.println("✅ Resposta: " + response);
+    } else {
+      Serial.print("❌ Erro: ");
+      Serial.println(http.errorToString(httpCode).c_str());
+    }
+    
     http.end();
-  }
 
-  delay(5000);
+    delay(5000); // a cada 5 segundos
+  } else {
+    Serial.println("❌ WiFi desconectado - tentando reconectar...");
+    WiFi.reconnect();
+    delay(2000);
+  }
 }

@@ -7,7 +7,7 @@ const morgan = require('morgan');
 const rateLimit = require('express-rate-limit');
 const logger = require('./helpers/logger');
 const prisma = require('./prismaClient');
-const WebSocket = require('ws');
+const { WebSocketServer } = require('ws');
 
 // =================== ROTAS ===================
 const usersRouter = require('./Routes/userRoutes');
@@ -16,7 +16,10 @@ const measurementsRouter = require('./Routes/measurementRoutes');
 const newsletterRouter = require('./Routes/newsletterRoutes');
 const companyRoutes = require('./Routes/companyRoutes');
 const branchRoutes = require('./Routes/branchRoutes');
-const authRoutes = require('./Routes/authRoutes'); // rotas de autenticação
+const authRoutes = require('./Routes/authRoutes'); 
+const esp32Routes = require('./Routes/esp32Routes');
+const { setBroadcastFunction } = require('./controllers/esp32Controller');
+
 let paymentRoutes;
 try {
   paymentRoutes = require('./Routes/paymentRoutes');
@@ -24,9 +27,10 @@ try {
   paymentRoutes = null;
 }
 
-// =================== SWAGGER ===================
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+
+// =================== SWAGGER ===================
 const swaggerSpec = swaggerJsdoc({
   definition: {
     openapi: '3.0.0',
@@ -39,34 +43,17 @@ const app = express();
 let server;
 let wss; // WebSocket server
 
-// ------------------------------
-// ARMAZENA O ÚLTIMO DADO RECEBIDO (placa solar)
-// ------------------------------
-let lastSolarData = null;
-
-function broadcast(data) {
-  if (!wss) return;
-  for (const client of wss.clients) {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(JSON.stringify(data));
-    }
-  }
-}
-
 // =================== MIDDLEWARE ===================
-// segurança e logs
 app.use(helmet());
 if (process.env.NODE_ENV !== 'production') app.use(morgan('dev'));
 
-// rate limiting
 app.use(
   rateLimit({
-    windowMs: 15 * 60 * 1000, // 15 minutos
+    windowMs: 15 * 60 * 1000,
     max: 200,
   })
 );
 
-// Captura rawBody (necessário para webhooks como Stripe)
 app.use(
   express.json({
     limit: '10mb',
@@ -82,11 +69,9 @@ const allowedOrigins = process.env.ALLOWED_ORIGINS?.split(',').map((s) => s.trim
 
 app.use(
   cors({
-    origin:"*",
-
     origin: function (origin, callback) {
-      if (!origin) return callback(null, true); // Postman, mobile apps, server-to-server
-      if (allowedOrigins.length === 0) return callback(null, true); // sem restrição configurada
+      if (!origin) return callback(null, true);
+      if (allowedOrigins.length === 0) return callback(null, true);
       const isAllowed = allowedOrigins.some((allowed) => origin.includes(allowed));
       if (isAllowed) return callback(null, true);
       console.warn(`🚫 CORS bloqueou origem: ${origin}`);
@@ -102,13 +87,8 @@ app.use(
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
 
 // =================== ROTAS ===================
-// Autenticação primeiro
 app.use('/auth', authRoutes);
-
-// Pagamentos (se existir)
 if (paymentRoutes) app.use('/payments', paymentRoutes);
-
-// Outras rotas
 app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
@@ -116,29 +96,6 @@ app.use('/newsletter', newsletterRouter);
 app.use('/companies', companyRoutes);
 app.use('/branches', branchRoutes);
 app.use('/esp32', esp32Routes);
-
-// ------------------------------
-// ESP32 / ARDUINO → ENVIA DADOS PRAQUI
-// ------------------------------
-app.post('/solar', (req, res) => {
-  const data = req.body;
-  console.log('🔆 Dados recebidos da placa solar:', data);
-
-  // Salvar último dado
-  lastSolarData = data;
-
-  // Enviar para todos celulares/conexões WebSocket
-  broadcast({ type: 'update', payload: data });
-
-  res.json({ message: 'OK, recebido!' });
-});
-
-// ------------------------------
-// MOBILE → BUSCA O ÚLTIMO DADO
-// ------------------------------
-app.get('/solar', (req, res) => {
-  res.json(lastSolarData || { message: 'Ainda sem dados...' });
-});
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
@@ -148,11 +105,9 @@ app.use((req, res) => res.status(404).json({ success: false, error: 'Not Found' 
 
 // Error handler
 app.use((err, req, res, next) => {
-  // CORS error
   if (err && err.message && err.message.includes('CORS bloqueou')) {
     return res.status(403).json({ success: false, error: err.message });
   }
-
   console.error(err);
   res.status(err.status || 500).json({
     success: false,
@@ -191,35 +146,48 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
-const esp32Routes = require('./esp32Routes');
+// =================== START SERVER COM WEBSOCKET ===================
+const PORT = process.env.PORT || 3333;
+server = app.listen(PORT, '0.0.0.0', () => {
+  logger.info(`✅ API rodando em http://0.0.0.0:${PORT}`);
 
-
-// =================== START SERVER ===================
-const PORT = process.env.PORT || 3000;
-server = app.listen(PORT, () => {
-  logger.info(`API rodando na porta ${PORT}`);
-
-  // Inicializa WebSocket server ligado ao mesmo servidor HTTP
-  wss = new WebSocket.Server({ server });
+  // Inicializa WebSocket server
+  wss = new WebSocketServer({ 
+    server,
+    perMessageDeflate: false,
+  });
 
   wss.on('connection', (ws) => {
-    console.log('📱 Mobile conectado ao WebSocket!');
-
-    // Quando conectar, já envia o último dado
-    if (lastSolarData) {
-      ws.send(JSON.stringify({ type: 'update', payload: lastSolarData }));
-    }
+    console.log('📱 [WS] Cliente conectado! Total:', wss.clients.size);
 
     ws.on('message', (msg) => {
-      // opcional: tratar mensagens vindas do cliente
-      console.log('Mensagem WS recebida:', msg.toString());
+      console.log('📨 [WS] Mensagem recebida:', msg.toString());
     });
 
     ws.on('close', () => {
-      console.log('Cliente WebSocket desconectado.');
+      console.log('❌ [WS] Cliente desconectado. Restante:', wss.clients.size);
+    });
+
+    ws.on('error', (err) => {
+      console.error('⚠️ [WS] Erro:', err.message);
     });
   });
-});
 
+  // Injeta a função broadcast no controller
+  setBroadcastFunction((data) => {
+    if (wss) {
+      let count = 0;
+      for (const client of wss.clients) {
+        if (client.readyState === 1) { // OPEN
+          client.send(JSON.stringify(data));
+          count++;
+        }
+      }
+      console.log(`📤 [WS] Broadcast enviado para ${count} cliente(s)`);
+    }
+  });
+
+  console.log('🔌 [WS] WebSocket server pronto!');
+});
 
 module.exports = app;

@@ -1,60 +1,51 @@
-const { prisma } = require("../prismaClient");
+const prisma = require('../prismaClient');
 
-/**
- * Recebe dados do ESP32 e salva no banco
- */
-exports.receiveMeasurements = async (req, res) => {
+// Referência global para fazer broadcast
+let broadcastFunction = null;
+
+function setBroadcastFunction(fn) {
+  broadcastFunction = fn;
+}
+
+const receiveData = async (req, res) => {
   try {
-    const { serial, voltage, current, power, temperature } = req.body;
+    const data = req.body;
+    console.log('🔆 Dados recebidos do ESP32:', data);
 
-    if (!serial) {
-      return res.status(400).json({ error: "Serial do painel é obrigatório." });
+    // Se houver função broadcast, envia via WebSocket
+    if (broadcastFunction) {
+      broadcastFunction({ type: 'update', payload: data });
+      console.log('📢 Broadcast enviado para WebSocket');
     }
 
-    // Verificar se existe um painel com esse serial
-    let panel = await prisma.panel.findUnique({
-      where: { serial },
-    });
-
-    if (!panel) {
-      // Se não existir, cria automaticamente
-      panel = await prisma.panel.create({
-        data: {
-          serial,
-          model: "ESP32-Solaire",
-          location: "Não definida",
-          status: "ONLINE",
-        },
-      });
+    // Salvar no banco de dados (opcional)
+    if (data.panelId && data.tensao && data.corrente && data.potencia) {
+      try {
+        await prisma.measurement.create({
+          data: {
+            panelId: parseInt(data.panelId),
+            temperatura: parseFloat(data.temperatura) || 0,
+            corrente: parseFloat(data.corrente),
+            tensao: parseFloat(data.tensao),
+            potencia: parseFloat(data.potencia),
+            timestamp: new Date(),
+          },
+        });
+        console.log('✅ Dados salvos no banco');
+      } catch (dbErr) {
+        console.warn('⚠️ Erro ao salvar no banco (continuando):', dbErr.message);
+      }
     }
 
-    // Salvar a medição
-    const measurement = await prisma.measurement.create({
-      data: {
-        panelId: panel.id,
-        energia_kWh: power / 1000 / 60, // exemplo: transformar W→kWh (1 min)
-        status: "OK",
-      },
+    res.status(200).json({ 
+      message: 'OK, recebido!', 
+      received: data,
+      broadcast: broadcastFunction ? 'enviado' : 'não inicializado'
     });
-
-    // Atualiza lastSeen do painel
-    await prisma.panel.update({
-      where: { id: panel.id },
-      data: { lastSeen: new Date(), status: "ONLINE" },
-    });
-
-    return res.status(200).json({
-      message: "Dados recebidos com sucesso!",
-      saved: {
-        panel: panel.serial,
-        voltage,
-        current,
-        power,
-        temperature,
-      },
-    });
-  } catch (error) {
-    console.error("Erro ao salvar dados do ESP32:", error);
-    return res.status(500).json({ error: "Erro interno no servidor." });
+  } catch (err) {
+    console.error('❌ Erro ao processar dados:', err);
+    res.status(500).json({ error: err.message });
   }
 };
+
+module.exports = { receiveData, setBroadcastFunction };
