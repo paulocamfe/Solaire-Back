@@ -15,7 +15,8 @@ model User {
   role     Role    @default(RESIDENTIAL)
   cpf      String?
 
-  companyName    String?   // <-- novo campo para usuário business
+  companyName String?  // usuário business
+  cnpj        String?  // <-- adicionando o CNPJ
 
   tarifaKwh    Float? @default(0.75)
   fatorCo2Kwh  Float? @default(0.0718)

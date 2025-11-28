@@ -54,9 +54,9 @@ async function registerResidentialUser(req, res, next) {
 // ==================== REGISTRO DE USUÁRIO EMPRESARIAL ====================
 async function registerBusinessUser(req, res, next) {
   try {
-    const { userName, userEmail, password, companyName } = req.body;
+    const { userName, userEmail, password, companyName, cnpj } = req.body;
 
-    if (!userName || !userEmail || !password || !companyName) {
+    if (!userName || !userEmail || !password || !companyName || !cnpj) {
       return fail(res, 'Todos os campos são obrigatórios para o cadastro empresarial');
     }
 
@@ -71,7 +71,8 @@ async function registerBusinessUser(req, res, next) {
         email: userEmail,
         password: hashed,
         role: 'BUSINESS',
-        companyName, // guarda o nome da empresa aqui
+        companyName,
+        cnpj // <-- adicionando o CNPJ aqui
       },
     });
 
@@ -81,6 +82,7 @@ async function registerBusinessUser(req, res, next) {
         name: newUser.name,
         email: newUser.email,
         companyName: newUser.companyName,
+        cnpj: newUser.cnpj
       },
     }, 'Usuário empresarial registrado com sucesso');
   } catch (err) {
