@@ -1,69 +1,39 @@
 const { prisma } = require("../prismaClient");
 const { success, fail } = require('../helpers/response');
 
-async function ingestMeasurement(req, res, next) {
-    try {
-        const serial = req.body.serial && String(req.body.serial).trim();
-        const { potencia_W, temperatura, tensao, corrente, status } = req.body;
-        if (!serial || typeof potencia_W !== 'number') {
-            return res.status(400).json({ error: 'Serial e potencia_W (numérico) são obrigatórios.' });
-        }
-        const panel = await prisma.panel.findUnique({
-            where: { serial },
-            select: { id: true },
-        });
-        if (!panel) {
-            return res.status(401).json({ error: 'Painel não autorizado ou não provisionado.' });
-        }
-        const intervaloSegundos = 5.0; 
-        const energia_kWh = (potencia_W / 1000.0) * (intervaloSegundos / 3600.0);
-        const newMeasurement = await prisma.measurement.create({
-            data: {
-                panelId: panel.id,
-                energia_kWh: energia_kWh, 
-                status: status || 'OK',
-                timestamp: new Date(),
+const tarifa = 0.64;
+const fatorCO2 = 0.084; 
 
-                // --- SALVANDO OS NOVOS DADOS ---
-                potencia_W: potencia_W,
-                temperatura: temperatura,
-                tensao: tensao,
-                corrente: corrente
-            },
-        });
+const energia_kWh = (potencia_W / 1000) * (intervaloSegundos / 3600);
 
-        // (O resto da função continua igual: update no lastSeen e resposta 202)
-        // ...
-        await prisma.panel.update({
-             where: { id: panel.id },
-             data: { lastSeen: new Date() },
-        });
+const economia_R$ = energia_kWh * tarifa;
+const co2_kg = energia_kWh * fatorCO2;
 
-        return res.status(202).json({
-             message: 'Medição registrada com sucesso.',
-             id: newMeasurement.id,
-        });
+const newMeasurement = await prisma.measurement.create({
+    data: {
+        panelId: panel.id,
+        energia_kWh,
+        economia_R$,
+        co2_kg,
+        potencia_W,
+        temperatura,
+        tensao,
+        corrente,
+        status: status || 'OK',
+        timestamp: new Date(),
+    },
+});
 
-    } catch (err) {
-        next(err);
-    }
-}
-
-async function ping(req, res) {
-    return res.status(200).json({ message: "pong" });
-}
-
-// ==================== LISTAR MEDIÇÕES DE UM PAINEL (VERSÃO SEGURA) ====================
 
 async function getMeasurement(req, res, next) {
     try {
         const measurementId = parseInt(req.params.id, 10);
-        const userId = req.user.id; 
+        const userId = req.user.id;
 
         const measurement = await prisma.measurement.findUnique({
             where: { id: measurementId },
             include: {
-                panel: true 
+                panel: true
             },
         });
 
@@ -98,7 +68,7 @@ async function getSummary(req, res, next) {
             where: {
                 panelId: panelId,
                 timestamp: {
-                    gte: startDate, 
+                    gte: startDate,
                 },
             },
         });
