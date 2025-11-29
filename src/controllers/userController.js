@@ -126,7 +126,14 @@ async function getMe(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, email: true, role: true, companyId: true },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        role: true,
+        companyName: true, 
+        cnpj: true,          
+      },
     });
 
     if (!user) return fail(res, 'Usuário não encontrado', 404);
@@ -136,6 +143,7 @@ async function getMe(req, res, next) {
     next(err);
   }
 }
+
 
 // ==================== RESUMO DE DADOS DO USUÁRIO RESIDENCIAL ====================
 async function getResidentialSummary(req, res, next) {
