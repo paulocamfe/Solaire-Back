@@ -43,7 +43,7 @@ enum Role {
 
 model Panel {
   id          Int       @id @default(autoincrement())
-  serial      String    @unique
+  serial      String
   location    String
   model       String
   installedAt DateTime? @default(now())
@@ -57,6 +57,8 @@ model Panel {
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([serial, userId])  // <--- restrição correta
 }
 
 model Measurement {

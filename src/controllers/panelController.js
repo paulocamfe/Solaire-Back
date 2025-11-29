@@ -30,6 +30,8 @@ async function addPanel(req, res, next) {
                 return fail(res, 'Limite de 10 painéis por usuário residencial atingido.', 403);
             }
         }
+        console.log("BODY RECEBIDO:", req.body);
+        console.log("USER LOGADO:", req.user);
 
         const newPanel = await prisma.panel.create({
             data: {
