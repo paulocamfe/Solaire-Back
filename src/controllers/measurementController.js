@@ -1,10 +1,13 @@
 const { prisma } = require("../prismaClient");
 const { success, fail } = require('../helpers/response');
 
-const tarifa = 0.64;    
-const fatorCO2 = 0.084; 
+const tarifa = 0.64;
+const fatorCO2 = 0.084;
 
 
+/* ============================================================
+   SALVAR MEDIÇÃO
+============================================================ */
 async function ingestMeasurement(req, res, next) {
     try {
         const userId = req.user.id;
@@ -22,6 +25,7 @@ async function ingestMeasurement(req, res, next) {
         if (!panelId) return fail(res, "panelId é obrigatório", 400);
         if (potencia_W == null) return fail(res, "potência (potencia_W) é obrigatória", 400);
 
+        // Garantir que painel existe e pertence ao usuário
         const panel = await prisma.panel.findUnique({
             where: { id: panelId }
         });
@@ -29,10 +33,12 @@ async function ingestMeasurement(req, res, next) {
         if (!panel) return fail(res, "Painel não encontrado", 404);
         if (panel.userId !== userId) return fail(res, "Acesso negado", 403);
 
+        // Cálculos
         const energia_kWh = (potencia_W / 1000) * (intervaloSegundos / 3600);
         const economia_Reais = energia_kWh * tarifa;
         const co2_kg = energia_kWh * fatorCO2;
 
+        // Criar registro
         const measurement = await prisma.measurement.create({
             data: {
                 panelId,
@@ -52,10 +58,14 @@ async function ingestMeasurement(req, res, next) {
 
     } catch (err) {
         console.error("Erro no ingestMeasurement:", err);
-        next(err);
+        return next(err);
     }
 }
 
+
+/* ============================================================
+   OBTER UMA ÚNICA MEDIÇÃO
+============================================================ */
 async function getMeasurement(req, res, next) {
     try {
         const measurementId = parseInt(req.params.id, 10);
@@ -63,21 +73,30 @@ async function getMeasurement(req, res, next) {
 
         const measurement = await prisma.measurement.findUnique({
             where: { id: measurementId },
-            include: { panel: true },
+            include: { panel: true }, // <-- NECESSÁRIO PARA measurement.panel existir
         });
 
-        if (!measurement) return fail(res, 'Medição não encontrada', 404);
+        if (!measurement)
+            return fail(res, 'Medição não encontrada', 404);
+
+        if (!measurement.panel)
+            return fail(res, 'Painel da medição não encontrado', 404);
+
         if (measurement.panel.userId !== userId)
             return fail(res, 'Você não tem permissão para ver esta medição.', 403);
 
         return success(res, measurement);
 
     } catch (err) {
+        console.error("Erro em getMeasurement:", err);
         next(err);
     }
 }
 
 
+/* ============================================================
+   SUMÁRIO DE ENERGIA
+============================================================ */
 async function getSummary(req, res, next) {
     try {
         const panelId = parseInt(req.params.panelId, 10);
@@ -110,10 +129,15 @@ async function getSummary(req, res, next) {
         });
 
     } catch (err) {
+        console.error("Erro em getSummary:", err);
         next(err);
     }
 }
 
+
+/* ============================================================
+   LISTAR MEDIÇÕES DE UM PAINEL
+============================================================ */
 async function listMeasurementsByPanel(req, res, next) {
     try {
         const userId = req.user.id;
@@ -150,9 +174,11 @@ async function listMeasurementsByPanel(req, res, next) {
         });
 
     } catch (err) {
+        console.error("Erro em listMeasurementsByPanel:", err);
         next(err);
     }
 }
+
 
 module.exports = {
     ingestMeasurement,
