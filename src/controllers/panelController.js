@@ -36,7 +36,6 @@ async function addPanel(req, res, next) {
         const newPanel = await prisma.panel.create({
             data: {
                 serial,
-                location,
                 model: model || 'Genérico',
                 status: 'Ativa',
                 user: { connect: { id: userId } },
