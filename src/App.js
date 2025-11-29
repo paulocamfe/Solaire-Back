@@ -14,8 +14,6 @@ const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
 const measurementsRouter = require('./Routes/measurementRoutes');
 const newsletterRouter = require('./Routes/newsletterRoutes');
-const companyRoutes = require('./Routes/companyRoutes');
-const branchRoutes = require('./Routes/branchRoutes');
 const authRoutes = require('./Routes/authRoutes'); 
 const esp32Routes = require('./Routes/esp32Routes');
 const { setBroadcastFunction } = require('./controllers/esp32Controller');
@@ -93,8 +91,6 @@ app.use('/users', usersRouter);
 app.use('/panels', panelsRouter);
 app.use('/measurements', measurementsRouter);
 app.use('/newsletter', newsletterRouter);
-app.use('/companies', companyRoutes);
-app.use('/branches', branchRoutes);
 app.use('/esp32', esp32Routes);
 
 // Healthcheck
