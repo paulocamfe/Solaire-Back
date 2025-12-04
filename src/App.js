@@ -18,6 +18,7 @@ const companyRoutes = require('./Routes/companyRoutes');
 const branchRoutes = require('./Routes/branchRoutes');
 const authRoutes = require('./Routes/authRoutes'); 
 const esp32Routes = require('./Routes/esp32Routes');
+const supportRoutes = require('./Routes/supportRoutes');
 const { setBroadcastFunction } = require('./controllers/esp32Controller');
 
 let paymentRoutes;
@@ -96,6 +97,7 @@ app.use('/newsletter', newsletterRouter);
 app.use('/companies', companyRoutes);
 app.use('/branches', branchRoutes);
 app.use('/esp32', esp32Routes);
+app.use('/support', supportRoutes);
 
 // Healthcheck
 app.get('/health', (req, res) => res.json({ ok: true, uptime: process.uptime() }));
