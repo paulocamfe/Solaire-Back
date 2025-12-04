@@ -3,7 +3,6 @@ const router = express.Router();
 
 const {
   ingestMeasurement,
-  ping,
   listMeasurementsByPanel,
   getMeasurement,
   getSummary,
@@ -12,10 +11,7 @@ const {
 const autenticar = require("../middleware/auth");
 
 // POST /measurements → cria uma nova medição
-router.post("/", ingestMeasurement);
-
-// POST /measurements/ping → teste de autenticação
-router.post("/ping", autenticar, ping);
+router.post("/", autenticar, ingestMeasurement);
 
 // GET /measurements/panel/:panelId → lista todas as medições de um painel
 router.get("/panel/:panelId", autenticar, listMeasurementsByPanel);

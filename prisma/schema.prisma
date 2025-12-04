@@ -15,36 +15,25 @@ model User {
   role     Role    @default(RESIDENTIAL)
   cpf      String?
 
-  payments Payment[]
+  companyName String?  // usuário business
+  cnpj        String?  // <-- adicionando o CNPJ
+
+  tarifaKwh    Float? @default(0.75)
+  fatorCo2Kwh  Float? @default(0.0718)
+
+  twoFactorEnabled Boolean @default(false)
+  twoFactorCode    String?
+  twoFactorExpires DateTime?
+
+  resetToken        String?
+  resetTokenExpires DateTime?
+
+  panels            Panel[]
+  payments          Payment[]
+  passwordResets    PasswordReset[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
-
-  twoFactorEnabled Boolean         @default(false)
-  twoFactorCode    String?
-  twoFactorExpires DateTime?
-  panels           Panel[]
-  passwordResets   PasswordReset[]
-  id                Int             @id @default(autoincrement())
-  name              String
-  email             String          @unique
-  password          String
-  role              Role            @default(RESIDENTIAL)
-  cpf               String?
-  tarifaKwh         Float?          @default(0.75)
-  fatorCo2Kwh       Float?          @default(0.0718)
-  createdAt         DateTime        @default(now())
-  updatedAt         DateTime        @updatedAt
-  resetToken        String?
-  resetTokenExpires DateTime?
-  twoFactorEnabled  Boolean         @default(false)
-  twoFactorCode     String?
-  twoFactorExpires  DateTime?
-  companyId         Int?
-  company           Company?        @relation(fields: [companyId], references: [id])
-  panels            Panel[]
-  passwordResets    PasswordReset[]
-  payments          Payment[] // <-- relação inversa com Payment
 }
 
 enum Role {
@@ -54,7 +43,7 @@ enum Role {
 
 model Panel {
   id          Int       @id @default(autoincrement())
-  serial      String    @unique
+  serial      String
   location    String
   model       String
   installedAt DateTime? @default(now())
@@ -63,28 +52,32 @@ model Panel {
 
   userId Int?
   user   User? @relation(fields: [userId], references: [id])
+
   measurements Measurement[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
+
+  @@unique([serial, userId])  // <--- restrição correta
 }
 
 model Measurement {
-  id      Int   @id @default(autoincrement())
-  panelId Int
-  panel   Panel @relation(fields: [panelId], references: [id])
+  id           Int      @id @default(autoincrement())
+  timestamp    DateTime @default(now())
 
-  energia_kWh Float
-  status      String
-  timestamp   DateTime @default(now())
+  potencia_W   Float?
+  temperatura  Float?
+  tensao       Float?
+  corrente     Float?
+  energia_kWh  Float
 
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  economia_Reais Float?
+  co2_kg         Float?
 
-  temperatura Float?
-  tensao      Float?
-  corrente    Float?
-  potencia_W  Float?
+  status       String?
+
+  panel        Panel     @relation(fields: [panelId], references: [id])
+  panelId      Int
 }
 
 model NewsletterSubscriber {

@@ -54,54 +54,42 @@ async function registerResidentialUser(req, res, next) {
 // ==================== REGISTRO DE USUÁRIO EMPRESARIAL ====================
 async function registerBusinessUser(req, res, next) {
   try {
-    const { userName, userEmail, password, companyName, companyCnpj } = req.body;
+    const { userName, userEmail, password, companyName, cnpj } = req.body;
 
-    if (!userName || !userEmail || !password || !companyName || !companyCnpj) {
+    if (!userName || !userEmail || !password || !companyName || !cnpj) {
       return fail(res, 'Todos os campos são obrigatórios para o cadastro empresarial');
     }
-
-    const existingCompany = await prisma.company.findUnique({ where: { cnpj: companyCnpj } });
-    if (existingCompany) return fail(res, 'CNPJ já cadastrado');
 
     const existingUser = await prisma.user.findUnique({ where: { email: userEmail } });
     if (existingUser) return fail(res, 'E-mail já cadastrado');
 
     const hashed = await bcrypt.hash(password, 10);
 
-    const result = await prisma.$transaction(async (tx) => {
-      const newCompany = await tx.company.create({
-        data: { name: companyName, cnpj: companyCnpj },
-      });
-
-      const newUser = await tx.user.create({
-        data: {
-          name: userName,
-          email: userEmail,
-          password: hashed,
-          role: 'BUSINESS',
-          companyId: newCompany.id,
-        },
-      });
-
-      await tx.branch.create({
-        data: {
-          name: 'Sede Principal',
-          address: 'Endereço não informado',
-          companyId: newCompany.id,
-        },
-      });
-
-      return { user: newUser, company: newCompany };
+    const newUser = await prisma.user.create({
+      data: {
+        name: userName,
+        email: userEmail,
+        password: hashed,
+        role: 'BUSINESS',
+        companyName,
+        cnpj // <-- adicionando o CNPJ aqui
+      },
     });
 
     return success(res, {
-      user: { id: result.user.id, name: result.user.name, email: result.user.email },
-      company: { id: result.company.id, name: result.company.name },
-    }, 'Empresa e usuário administrador registrados com sucesso');
+      user: {
+        id: newUser.id,
+        name: newUser.name,
+        email: newUser.email,
+        companyName: newUser.companyName,
+        cnpj: newUser.cnpj
+      },
+    }, 'Usuário empresarial registrado com sucesso');
   } catch (err) {
     next(err);
   }
 }
+
 
 // ==================== LOGIN ====================
 async function loginUser(req, res, next) {
@@ -121,12 +109,12 @@ async function loginUser(req, res, next) {
       { expiresIn: '7d' }
     );
 
-    return success(res, { 
-      id: user.id, 
-      name: user.name, 
-      email: user.email, 
-      role: user.role, 
-      token 
+    return success(res, {
+      id: user.id,
+      name: user.name,
+      email: user.email,
+      role: user.role,
+      token
     }, 'Login realizado com sucesso');
   } catch (err) {
     next(err);
@@ -138,7 +126,14 @@ async function getMe(req, res, next) {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.id },
-      select: { id: true, name: true, email: true, role: true, companyId: true },
+      select: { 
+        id: true, 
+        name: true, 
+        email: true, 
+        role: true,
+        companyName: true, 
+        cnpj: true,          
+      },
     });
 
     if (!user) return fail(res, 'Usuário não encontrado', 404);
@@ -148,6 +143,7 @@ async function getMe(req, res, next) {
     next(err);
   }
 }
+
 
 // ==================== RESUMO DE DADOS DO USUÁRIO RESIDENCIAL ====================
 async function getResidentialSummary(req, res, next) {
