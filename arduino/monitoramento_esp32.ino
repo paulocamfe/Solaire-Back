@@ -4,7 +4,7 @@
 
 const char* ssid = "SALA";      
 const char* password = "123456789";
-const char* serverUrl = "http://192.168.137.1:3333/esp32/data"; 
+const char* serverUrl = "http://192.168.43.74:3333/esp32/data"; 
 
 void setup() {
   Serial.begin(115200);

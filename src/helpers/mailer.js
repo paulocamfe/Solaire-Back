@@ -1,45 +1,26 @@
-const nodemailer = require('nodemailer');
+import { Resend } from "resend";
 
-const transportOptions = process.env.EMAIL_HOST
-  ? {
-      host: process.env.EMAIL_HOST,
-      port: process.env.EMAIL_PORT ? parseInt(process.env.EMAIL_PORT, 10) : 587,
-      secure: process.env.EMAIL_SECURE === 'true',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    }
-  : {
-      service: process.env.EMAIL_SERVICE || 'gmail',
-      auth: {
-        user: process.env.EMAIL_USER,
-        pass: process.env.EMAIL_PASS,
-      },
-    };
+const resend = new Resend(process.env.RESEND_API_KEY);
 
-const transporter = nodemailer.createTransport(transportOptions);
-
-transporter.verify((err) => {
-  if (err) console.error('❌ Mailer verify error:', err);
-  else console.log('✅ Mailer ready');
-});
-
-const sendMail = async (options) => {
+export async function sendWelcomeEmail(to) {
   try {
-    const mailOptions = {
-      from: process.env.EMAIL_FROM || `"Solaire" <${process.env.EMAIL_USER}>`,
-      to: options.to,
-      subject: options.subject,
-      html: options.html,
-    };
-    const info = await transporter.sendMail(mailOptions);
-    console.log('📨 Email enviado:', info.response || info);
-    return info;
-  } catch (error) {
-    console.error('❌ Erro ao enviar email:', error);
-    throw error;
-  }
-};
+    console.log("📨 Enviando email via Resend para:", to);
 
-module.exports = { sendMail };
+    const response = await resend.emails.send({
+      from: "Solaire <onboarding@resend.dev>", 
+      to,
+      subject: "Bem-vindo à nossa Newsletter!",
+      html: `
+        <h2>☀️ Bem-vindo à Solaire!</h2>
+        <p>Obrigado por se inscrever na nossa newsletter. Em breve você receberá novidades sobre energia sustentável e atualizações exclusivas!</p>
+        <p>— Equipe Solaire</p>
+      `,
+    });
+
+    console.log("📧 Email enviado com sucesso:", response);
+    return { success: true };
+  } catch (error) {
+    console.error("❌ Erro ao enviar email Resend:", error);
+    return { success: false, error };
+  }
+}

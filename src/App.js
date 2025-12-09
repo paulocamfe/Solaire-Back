@@ -106,10 +106,24 @@ app.use((err, req, res, next) => {
   if (err && err.message && err.message.includes('CORS bloqueou')) {
     return res.status(403).json({ success: false, error: err.message });
   }
-  console.error(err);
-  res.status(err.status || 500).json({
+
+  // Log completo no servidor
+  console.error('Unhandled error:', err);
+
+  const msg = String(err.message || 'Erro interno');
+
+  // Caso explícito de erro de conexão ao banco (Prisma P1001 / mensagens de conexão)
+  if (err.code === 'P1001' || /Can't reach database server|ECONNREFUSED|connect ECONNREFUSED/i.test(msg)) {
+    return res.status(503).json({ success: false, error: 'Serviço de banco de dados indisponível. Tente novamente mais tarde.' });
+  }
+
+  // Evita vazar mensagens técnicas para o cliente em erros 5xx
+  const status = err.status && Number(err.status) < 500 ? err.status : 500;
+  const publicMessage = status >= 500 ? 'Erro interno' : (err.message || 'Erro');
+
+  res.status(status).json({
     success: false,
-    error: err.message || 'Erro interno',
+    error: publicMessage,
     type: err.name || 'InternalError',
   });
 });
