@@ -15,8 +15,8 @@ model User {
   role     Role    @default(RESIDENTIAL)
   cpf      String?
 
-  companyName String?  // usuário business
-  cnpj        String?  // <-- adicionando o CNPJ
+  companyName String?
+  cnpj        String?
 
   tarifaKwh    Float? @default(0.75)
   fatorCo2Kwh  Float? @default(0.0718)
@@ -28,6 +28,8 @@ model User {
   resetToken        String?
   resetTokenExpires DateTime?
 
+  profileImage      String?    // <-------- ADICIONAR ESTE CAMPO
+
   panels            Panel[]
   payments          Payment[]
   passwordResets    PasswordReset[]
@@ -35,6 +37,7 @@ model User {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }
+
 
 enum Role {
   RESIDENTIAL

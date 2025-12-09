@@ -19,6 +19,7 @@ const esp32Routes = require('./Routes/esp32Routes');
 const supportRoutes = require('./Routes/supportRoutes');
 const { setBroadcastFunction } = require('./controllers/esp32Controller');
 
+
 let paymentRoutes;
 try {
   paymentRoutes = require('./Routes/paymentRoutes');
@@ -28,6 +29,10 @@ try {
 
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
+
+// foto
+app.use("/uploads", express.static("uploads"));
+
 
 // =================== SWAGGER ===================
 const swaggerSpec = swaggerJsdoc({

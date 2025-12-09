@@ -12,6 +12,8 @@ const {
   deleteUser
 } = require('../controllers/userController');
 const autenticar = require('../middleware/auth');
+const upload = require("../helpers/uploadConfig");
+const { updateProfileImage } = require("../controllers/userController");
 
 // =================== Rotas públicas ===================
 
@@ -41,5 +43,13 @@ router.get('/', autenticar, listUsers);
 
 // Deletar usuário
 router.delete('/:id', autenticar, deleteUser);
+
+router.put(
+  "/users/me/profile-image",
+  authMiddleware,              
+  upload.single("profileImage"), 
+  updateProfileImage
+);
+
 
 module.exports = router;

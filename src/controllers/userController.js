@@ -12,6 +12,49 @@ const fail = (res, error, statusCode = 400) => {
   return res.status(statusCode).json({ success: false, error });
 };
 
+const fs = require("fs");
+const path = require("path");
+
+// ==================== ATUALIZAR FOTO DE PERFIL ====================
+async function updateProfileImage(req, res, next) {
+  try {
+    const userId = req.user.id;
+
+    // Sem arquivo → erro
+    if (!req.file) {
+      return fail(res, "Nenhuma imagem enviada. Use multipart/form-data.");
+    }
+
+    const filename = req.file.filename;
+
+    // Buscar usuário atual
+    const user = await prisma.user.findUnique({ where: { id: userId } });
+    if (!user) return fail(res, "Usuário não encontrado", 404);
+
+    // Se tinha foto antes, apagar
+    if (user.profileImage) {
+      const oldPath = path.join(__dirname, "..", "uploads", user.profileImage);
+      if (fs.existsSync(oldPath)) {
+        fs.unlinkSync(oldPath);
+      }
+    }
+
+    // Atualizar no banco
+    const updated = await prisma.user.update({
+      where: { id: userId },
+      data: { profileImage: filename },
+    });
+
+    // URL pública
+    const baseUrl = process.env.BASE_URL || "http://localhost:3000";
+    const imageUrl = `${baseUrl}/uploads/${filename}`;
+
+    return success(res, { imageUrl }, "Foto de perfil atualizada");
+  } catch (err) {
+    next(err);
+  }
+}
+
 // ==================== REGISTRO DE USUÁRIO RESIDENCIAL ====================
 async function registerResidentialUser(req, res, next) {
   try {
@@ -329,7 +372,6 @@ async function deleteUser(req, res, next) {
   }
 }
 
-// ==================== EXPORTAÇÃO ====================
 module.exports = {
   registerResidentialUser,
   registerBusinessUser,
@@ -340,4 +382,5 @@ module.exports = {
   forgotPassword,
   resetPassword,
   deleteUser,
+  updateProfileImage,
 };
