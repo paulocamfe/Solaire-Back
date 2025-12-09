@@ -1,13 +1,13 @@
-import { Resend } from "resend";
+const { Resend } = require("resend");
 
 const resend = new Resend(process.env.RESEND_API_KEY);
 
-export async function sendWelcomeEmail(to) {
+async function sendWelcomeEmail(to) {
   try {
     console.log("📨 Enviando email via Resend para:", to);
 
     const response = await resend.emails.send({
-      from: "Solaire <onboarding@resend.dev>", 
+      from: "Solaire <onboarding@resend.dev>",
       to,
       subject: "Bem-vindo à nossa Newsletter!",
       html: `
@@ -24,3 +24,7 @@ export async function sendWelcomeEmail(to) {
     return { success: false, error };
   }
 }
+
+module.exports = {
+  sendWelcomeEmail,
+};
