@@ -46,7 +46,7 @@ router.delete('/:id', autenticar, deleteUser);
 
 router.put(
   "/users/me/profile-image",
-  authMiddleware,              
+  autenticar,              
   upload.single("profileImage"), 
   updateProfileImage
 );
