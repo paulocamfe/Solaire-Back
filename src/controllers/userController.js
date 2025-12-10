@@ -175,7 +175,8 @@ async function getMe(req, res, next) {
         email: true, 
         role: true,
         companyName: true, 
-        cnpj: true,          
+        cnpj: true,    
+        profileImage: true,      
       },
     });
 
