@@ -1,6 +1,6 @@
-import express from "express";
-import prisma from "../prismaClient.js";
-import { sendWelcomeEmail } from "../utils/mailer.js";
+const express = require("express");
+const prisma = require("../prismaClient.js");
+const { sendWelcomeEmail } = require("../utils/mailer.js");
 
 const router = express.Router();
 
@@ -52,4 +52,4 @@ router.post("/subscribe", async (req, res) => {
   }
 });
 
-export default router;
+module.exports = router;
