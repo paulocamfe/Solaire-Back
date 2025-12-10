@@ -30,8 +30,6 @@ try {
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
 
-// foto
-app.use("/uploads", express.static("uploads"));
 
 
 // =================== SWAGGER ===================
@@ -189,6 +187,9 @@ server = app.listen(PORT, '0.0.0.0', () => {
       console.error('⚠️ [WS] Erro:', err.message);
     });
   });
+
+  app.use("/uploads", express.static("uploads"));
+
 
   // Injeta a função broadcast no controller
   setBroadcastFunction((data) => {
