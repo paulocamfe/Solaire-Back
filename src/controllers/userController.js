@@ -4,6 +4,7 @@ const jwt = require('jsonwebtoken');
 const crypto = require('crypto');
 const { sendMail } = require('../helpers/mailer');
 
+
 const success = (res, data, message = 'Success') => {
   return res.json({ success: true, data, message });
 };

@@ -14,11 +14,10 @@ const usersRouter = require('./Routes/userRoutes');
 const panelsRouter = require('./Routes/panelRoutes');
 const measurementsRouter = require('./Routes/measurementRoutes');
 const newsletterRouter = require('./Routes/newsletterRoutes');
-const authRoutes = require('./Routes/authRoutes'); 
+const authRoutes = require('./Routes/authRoutes');
 const esp32Routes = require('./Routes/esp32Routes');
 const supportRoutes = require('./Routes/supportRoutes');
 const { setBroadcastFunction } = require('./controllers/esp32Controller');
-
 
 let paymentRoutes;
 try {
@@ -29,8 +28,6 @@ try {
 
 const swaggerJsdoc = require('swagger-jsdoc');
 const swaggerUi = require('swagger-ui-express');
-
-
 
 // =================== SWAGGER ===================
 const swaggerSpec = swaggerJsdoc({
@@ -43,7 +40,7 @@ const swaggerSpec = swaggerJsdoc({
 
 const app = express();
 let server;
-let wss; // WebSocket server
+let wss;
 
 // =================== MIDDLEWARE ===================
 app.use(helmet());
@@ -64,6 +61,7 @@ app.use(
     },
   })
 );
+
 app.use(express.urlencoded({ extended: true }));
 
 // =================== CORS ===================
@@ -84,6 +82,9 @@ app.use(
     credentials: true,
   })
 );
+
+// =================== SERVIR UPLOADS ===================
+app.use("/uploads", express.static("uploads"));
 
 // =================== SWAGGER ===================
 app.use('/docs', swaggerUi.serve, swaggerUi.setup(swaggerSpec));
@@ -110,17 +111,17 @@ app.use((err, req, res, next) => {
     return res.status(403).json({ success: false, error: err.message });
   }
 
-  // Log completo no servidor
   console.error('Unhandled error:', err);
 
   const msg = String(err.message || 'Erro interno');
 
-  // Caso explícito de erro de conexão ao banco (Prisma P1001 / mensagens de conexão)
   if (err.code === 'P1001' || /Can't reach database server|ECONNREFUSED|connect ECONNREFUSED/i.test(msg)) {
-    return res.status(503).json({ success: false, error: 'Serviço de banco de dados indisponível. Tente novamente mais tarde.' });
+    return res.status(503).json({
+      success: false,
+      error: 'Serviço de banco de dados indisponível. Tente novamente mais tarde.',
+    });
   }
 
-  // Evita vazar mensagens técnicas para o cliente em erros 5xx
   const status = err.status && Number(err.status) < 500 ? err.status : 500;
   const publicMessage = status >= 500 ? 'Erro interno' : (err.message || 'Erro');
 
@@ -135,12 +136,8 @@ app.use((err, req, res, next) => {
 async function shutdown(signal) {
   logger.info(`Recebido ${signal}, finalizando...`);
   try {
-    if (server) {
-      server.close(() => logger.info('Servidor encerrado.'));
-    }
-    if (wss) {
-      wss.close(() => logger.info('WebSocket encerrado.'));
-    }
+    if (server) server.close(() => logger.info('Servidor encerrado.'));
+    if (wss) wss.close(() => logger.info('WebSocket encerrado.'));
     await prisma.$disconnect();
     logger.info('Conexão Prisma encerrada com sucesso.');
     process.exit(0);
@@ -161,13 +158,13 @@ process.on('uncaughtException', (err) => {
   shutdown('uncaughtException');
 });
 
-// =================== START SERVER COM WEBSOCKET ===================
+// =================== START SERVER + WEBSOCKET ===================
 const PORT = process.env.PORT || 3333;
+
 server = app.listen(PORT, '0.0.0.0', () => {
   logger.info(`✅ API rodando em http://0.0.0.0:${PORT}`);
 
-  // Inicializa WebSocket server
-  wss = new WebSocketServer({ 
+  wss = new WebSocketServer({
     server,
     perMessageDeflate: false,
   });
@@ -188,15 +185,12 @@ server = app.listen(PORT, '0.0.0.0', () => {
     });
   });
 
-  app.use("/uploads", express.static("uploads"));
-
-
-  // Injeta a função broadcast no controller
+  // Função de broadcast global
   setBroadcastFunction((data) => {
     if (wss) {
       let count = 0;
       for (const client of wss.clients) {
-        if (client.readyState === 1) { // OPEN
+        if (client.readyState === 1) {
           client.send(JSON.stringify(data));
           count++;
         }
