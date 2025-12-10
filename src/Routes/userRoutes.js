@@ -45,11 +45,12 @@ router.get('/', autenticar, listUsers);
 router.delete('/:id', autenticar, deleteUser);
 
 router.put(
-  "/users/me/profile-image",
-  autenticar,              
-  upload.single("profileImage"), 
+  "/me/profile-image",
+  autenticar,
+  upload.single("image"), 
   updateProfileImage
 );
+
 
 
 module.exports = router;
