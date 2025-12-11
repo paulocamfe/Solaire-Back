@@ -39,6 +39,7 @@ const swaggerSpec = swaggerJsdoc({
 });
 
 const app = express();
+app.set('trust proxy', 1);
 let server;
 let wss;
 

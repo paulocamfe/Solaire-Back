@@ -1,54 +1,42 @@
 const express = require("express");
-const prisma = require("../prismaClient.js");
-const { sendWelcomeEmail } = require("../helpers/mailer.js");
-
 const router = express.Router();
+const { prisma } = require("../prismaClient");
+const sendNewsletterEmail = require("../helpers/mailer"); // seu mailer
 
-router.post("/subscribe", async (req, res) => {
+// Rota da newsletter
+router.post("/", async (req, res) => {
   try {
-    console.log("📥 Requisição recebida em /newsletter/subscribe");
-    console.log("Corpo da requisição:", req.body);
-
     const { email } = req.body;
 
-    if (!email || typeof email !== "string") {
-      return res.status(400).json({ success: false, error: "E-mail inválido" });
-    }
-
-    const normalized = email.trim().toLowerCase();
-
-    console.log("🔍 Verificando se o e-mail já existe no banco...");
-    const exists = await prisma.newsletterSubscriber.findUnique({
-      where: { email: normalized },
+    // Verifica se o e-mail já está cadastrado
+    const existing = await prisma.newsletter.findUnique({
+      where: { email },
     });
 
-    if (exists) {
-      return res.status(400).json({
-        success: false,
-        error: "Este e-mail já está inscrito!",
+    // ─────────────────────────────────────────────
+    // ENVIA O EMAIL SEMPRE (NOVO OU REPETIDO)
+    // ─────────────────────────────────────────────
+    await sendNewsletterEmail(email);
+
+    // Se já estiver cadastrado, só envia email e retorna sucesso
+    if (existing) {
+      return res.status(200).json({
+        message: "E-mail enviado com sucesso (já estava cadastrado).",
       });
     }
 
-    console.log("📝 Criando novo registro no banco...");
-    const created = await prisma.newsletterSubscriber.create({
-      data: { email: normalized },
+    // Se não existir, cria
+    await prisma.newsletter.create({
+      data: { email },
     });
 
-    console.log("✔️ Registro criado:", created);
-
-    console.log("📨 Enviando e-mail de boas-vindas...");
-    await sendWelcomeEmail(normalized);
-
-    return res.json({
-      success: true,
-      message: "Inscrição realizada com sucesso!",
+    return res.status(200).json({
+      message: "Cadastrado com sucesso e e-mail enviado!",
     });
+
   } catch (error) {
-    console.error("🔥 Erro inesperado:", error);
-    return res.status(500).json({
-      success: false,
-      error: "Erro interno no servidor",
-    });
+    console.error("Erro na newsletter:", error);
+    return res.status(500).json({ error: "Erro interno no servidor" });
   }
 });
 
