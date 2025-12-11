@@ -3,7 +3,6 @@ const router = express.Router();
 const prisma = require("../prismaClient");
 const { sendWelcomeEmail } = require("../helpers/mailer");
 
-
 // Rota da newsletter
 router.post("/", async (req, res) => {
   try {
@@ -18,18 +17,22 @@ router.post("/", async (req, res) => {
       where: { email },
     });
 
-    // Envia o email SEMPRE
-    await sendWelcomeEmail(email);
+    // Envia E-MAIL SEMPRE
+    const sent = await sendWelcomeEmail(email);
 
+    if (!sent.success) {
+      console.error("Erro ao enviar email:", sent.error);
+      return res.status(500).json({ error: "Falha ao enviar email" });
+    }
 
-    // Se já existir
+    // Se já existir, só retorna sucesso
     if (existing) {
       return res.status(200).json({
         message: "E-mail enviado com sucesso (já estava cadastrado).",
       });
     }
 
-    // Se NÃO existir, cria
+    // Se não existir, cria no banco
     await prisma.newsletterSubscriber.create({
       data: { email },
     });
