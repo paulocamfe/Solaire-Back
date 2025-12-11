@@ -17,15 +17,14 @@ router.post("/", async (req, res) => {
       where: { email },
     });
 
-    // Envia E-MAIL SEMPRE
+    // Envia o email SEMPRE
     const sent = await sendWelcomeEmail(email);
 
     if (!sent.success) {
-      console.error("Erro ao enviar email:", sent.error);
       return res.status(500).json({ error: "Falha ao enviar email" });
     }
 
-    // Se já existir, só retorna sucesso
+    // Se já existir apenas retorna
     if (existing) {
       return res.status(200).json({
         message: "E-mail enviado com sucesso (já estava cadastrado).",
