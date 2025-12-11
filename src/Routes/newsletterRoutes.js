@@ -1,6 +1,6 @@
 const express = require("express");
 const prisma = require("../prismaClient.js");
-const { sendWelcomeEmail } = require("../utils/mailer.js");
+const { sendWelcomeEmail } = require("../helpers/mailer.js");
 
 const router = express.Router();
 
