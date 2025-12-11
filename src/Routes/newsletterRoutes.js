@@ -1,32 +1,34 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../prismaClient");
-const sendNewsletterEmail = require("../helpers/mailer"); // seu mailer
+const { sendWelcomeEmail } = require("../helpers/mailer"); 
 
 // Rota da newsletter
 router.post("/", async (req, res) => {
   try {
     const { email } = req.body;
 
+    if (!email) {
+      return res.status(400).json({ error: "Email é obrigatório" });
+    }
+
     // Verifica se o e-mail já está cadastrado
-    const existing = await prisma.newsletter.findUnique({
+    const existing = await prisma.newsletterSubscriber.findUnique({
       where: { email },
     });
 
-    // ─────────────────────────────────────────────
-    // ENVIA O EMAIL SEMPRE (NOVO OU REPETIDO)
-    // ─────────────────────────────────────────────
-    await sendNewsletterEmail(email);
+    // Envia o email SEMPRE
+    await sendWelcomeEmail(email);
 
-    // Se já estiver cadastrado, só envia email e retorna sucesso
+    // Se já existir
     if (existing) {
       return res.status(200).json({
         message: "E-mail enviado com sucesso (já estava cadastrado).",
       });
     }
 
-    // Se não existir, cria
-    await prisma.newsletter.create({
+    // Se NÃO existir, cria
+    await prisma.newsletterSubscriber.create({
       data: { email },
     });
 
