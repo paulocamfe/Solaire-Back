@@ -1,6 +1,6 @@
 const express = require("express");
 const router = express.Router();
-const { prisma } = require("../prismaClient");
+const prisma = require("../prismaClient");
 const sendNewsletterEmail = require("../helpers/mailer"); // seu mailer
 
 // Rota da newsletter
