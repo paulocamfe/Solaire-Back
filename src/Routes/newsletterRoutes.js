@@ -1,7 +1,8 @@
 const express = require("express");
 const router = express.Router();
 const prisma = require("../prismaClient");
-const { sendWelcomeEmail } = require("../helpers/mailer"); 
+const { sendWelcomeEmail } = require("../helpers/mailer");
+
 
 // Rota da newsletter
 router.post("/", async (req, res) => {
@@ -19,6 +20,7 @@ router.post("/", async (req, res) => {
 
     // Envia o email SEMPRE
     await sendWelcomeEmail(email);
+
 
     // Se já existir
     if (existing) {

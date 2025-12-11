@@ -1,30 +1,34 @@
-const { Resend } = require("resend");
+const nodemailer = require("nodemailer");
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const transporter = nodemailer.createTransport({
+  host: "smtp.elasticemail.com",
+  port: 2525,
+  auth: {
+    user: process.env.ELASTIC_EMAIL_USER,
+    pass: process.env.ELASTIC_EMAIL_KEY,
+  },
+});
 
 async function sendWelcomeEmail(to) {
   try {
-    console.log("📨 Enviando email via Resend para:", to);
-
-    const response = await resend.emails.send({
-      from: "Solaire <onboarding@resend.dev>",
+    await transporter.sendMail({
+      from: "Solaire <solairesenai@gmail.com>",
       to,
-      subject: "Bem-vindo à nossa Newsletter!",
+      subject: "Bem-vindo à Newsletter da Solaire!",
       html: `
         <h2>☀️ Bem-vindo à Solaire!</h2>
-        <p>Obrigado por se inscrever na nossa newsletter. Em breve você receberá novidades sobre energia sustentável e atualizações exclusivas!</p>
+        <p>Obrigado por se inscrever na newsletter!</p>
         <p>— Equipe Solaire</p>
       `,
     });
 
-    console.log("📧 Email enviado com sucesso:", response);
+    console.log("📧 Email enviado com sucesso!");
     return { success: true };
-  } catch (error) {
-    console.error("❌ Erro ao enviar email Resend:", error);
-    return { success: false, error };
+
+  } catch (err) {
+    console.error("Erro ao enviar email:", err);
+    return { success: false, error: err };
   }
 }
 
-module.exports = {
-  sendWelcomeEmail,
-};
+module.exports = { sendWelcomeEmail };
